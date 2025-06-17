@@ -176,46 +176,100 @@ export const Editor: React.FC = () => {
     if (!editor) return;
 
     const replacement = issue.replacement ?? '';
+    console.log('Applying suggestion:', { original: issue.original, replacement, issue });
     
-    // If we have the original text, find and replace it
-    if (issue.original) {
+    // Use the more reliable text-based replacement approach
+    if (issue.original && replacement) {
       const currentText = editor.getText();
-      const originalIndex = currentText.indexOf(issue.original);
       
-      if (originalIndex !== -1) {
-        // Convert text position to document position
-        const from = originalIndex + 1; // TipTap positions start at 1
-        const to = from + issue.original.length;
+      console.log('Current text:', currentText);
+      console.log('Looking for:', issue.original);
+      
+      // Try to find the exact text in the current content
+      const textIndex = currentText.indexOf(issue.original);
+      
+      if (textIndex !== -1) {
+        // Use TipTap's built-in text replacement with proper document positions
+        // Convert text indices to document positions
+        let docPosition = 1; // TipTap positions start at 1
+        let textPosition = 0;
         
-        // Apply the replacement
+        // Walk through the document to find the correct position
+        editor.state.doc.descendants((node, pos) => {
+          if (node.isText && node.text) {
+            const nodeTextStart = textPosition;
+            const nodeTextEnd = textPosition + node.text.length;
+            
+            if (textIndex >= nodeTextStart && textIndex < nodeTextEnd) {
+              // Found the node containing our text
+              const offsetInNode = textIndex - nodeTextStart;
+                             const from = pos + offsetInNode;
+               const to = pos + offsetInNode + (issue.original?.length || 0);
+              
+              console.log('Replacing at positions:', { from, to, replacement });
+              
+              editor.chain()
+                .focus()
+                .setTextSelection({ from, to })
+                .insertContent(replacement)
+                .run();
+              
+              return false; // Stop traversal
+            }
+            textPosition = nodeTextEnd;
+          } else if (node.isText) {
+            // Handle empty text nodes
+            textPosition += node.text?.length || 0;
+          }
+          return true;
+        });
+          
+        // Re-analyze content after replacement to update suggestions
+        setTimeout(() => {
+          analyzeContentWithAI(editor.getText());
+        }, 200);
+      } else {
+        console.warn("Could not find original text to replace:", issue.original);
+        console.warn("Available text:", currentText);
+        
+        // Try a more flexible search - look for similar text
+        const words = issue.original.split(' ');
+        const firstWord = words[0];
+        const lastWord = words[words.length - 1];
+        
+        if (firstWord && lastWord && currentText.includes(firstWord) && currentText.includes(lastWord)) {
+          console.log('Trying flexible replacement...');
+          // Use simple string replacement as fallback
+          const newText = currentText.replace(issue.original, replacement);
+          editor.chain()
+            .clearContent()
+            .insertContent(`<p>${newText}</p>`)
+            .run();
+            
+          setTimeout(() => {
+            analyzeContentWithAI(editor.getText());
+          }, 200);
+        }
+      }
+    } else if (issue.startPosition !== undefined && issue.endPosition !== undefined && replacement) {
+      // Fallback to position-based replacement
+      console.log('Using position-based replacement');
+      const from = issue.startPosition + 1;
+      const to = issue.endPosition + 1;
+      
+      if (from >= 1 && to >= 1 && to <= editor.state.doc.content.size) {
         editor.chain().focus()
           .setTextSelection({ from, to })
           .insertContent(replacement)
           .run();
           
-        // Re-analyze content after replacement to update suggestions
+        // Re-analyze content after replacement
         setTimeout(() => {
           analyzeContentWithAI(editor.getText());
-        }, 100);
-      } else {
-        console.warn("Could not find original text to replace:", issue.original);
+        }, 200);
       }
-    } else if (issue.startPosition !== undefined && issue.endPosition !== undefined) {
-      // Fallback to position-based replacement
-      const from = issue.startPosition + 1;
-      const to = issue.endPosition + 1;
-      
-      editor.chain().focus()
-        .setTextSelection({ from, to })
-        .insertContent(replacement)
-        .run();
-        
-      // Re-analyze content after replacement
-      setTimeout(() => {
-        analyzeContentWithAI(editor.getText());
-      }, 100);
     } else {
-      console.error("Cannot apply suggestion - missing position or original text:", issue);
+      console.error("Cannot apply suggestion - missing data:", issue);
       return;
     }
 

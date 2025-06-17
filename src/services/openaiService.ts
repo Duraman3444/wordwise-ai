@@ -213,16 +213,23 @@ export class OpenAIService {
     while ((match = compoundPattern.exec(content)) !== null) {
       const clause1 = match[1];
       const conjunction = match[2];
-      if (clause1.split(' ').length > 2 && !clause1.endsWith(',')) {
+      const clause3 = match[3];
+      
+      // Check if this looks like two independent clauses (both have enough words)
+      if (clause1.split(' ').length > 2 && clause3.split(' ').length > 2 && !clause1.endsWith(',')) {
+        // We want to replace the entire phrase with the comma added
+        const originalPhrase = clause1 + conjunction + clause3;
+        const replacementPhrase = clause1 + ',' + conjunction + clause3;
+        
         suggestions.push({
           id: `punct_conj_${currentId++}`,
           text: conjunction.trim(),
           suggestion: `Use a comma before "${conjunction.trim()}" to join two independent clauses.`,
-          original: conjunction,
-          replacement: `,${conjunction}`,
+          original: originalPhrase,
+          replacement: replacementPhrase,
           type: 'grammar', category: 'grammar', confidence: 0.85,
-          startPosition: match.index + clause1.length,
-          endPosition: match.index + clause1.length + conjunction.length
+          startPosition: match.index,
+          endPosition: match.index + originalPhrase.length
         });
       }
     }
