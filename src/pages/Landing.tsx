@@ -42,6 +42,14 @@ export const Landing: React.FC = () => {
               <Button 
                 variant="outline" 
                 size="lg" 
+                onClick={() => navigate('/demo')}
+                className="border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+              >
+                Try Demo - No Signup Required
+              </Button>
+              <Button 
+                variant="outline" 
+                size="lg" 
                 onClick={() => navigate('/login')}
                 className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >

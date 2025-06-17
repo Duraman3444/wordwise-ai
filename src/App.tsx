@@ -11,6 +11,7 @@ import { Documents } from './pages/Documents'
 import { Profile } from './pages/Profile'
 import { Login } from './pages/auth/Login'
 import { Register } from './pages/auth/Register'
+import { Demo } from './pages/Demo'
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
             <main>
               <Routes>
                 <Route path="/" element={<Landing />} />
+                <Route path="/demo" element={<Demo />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route 
