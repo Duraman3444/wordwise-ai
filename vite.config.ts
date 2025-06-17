@@ -10,12 +10,25 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // PDF.js configuration for browser compatibility
+  optimizeDeps: {
+    include: ['pdfjs-dist']
+  },
+  define: {
+    // Required for PDF.js worker
+    global: 'globalThis',
+  },
   server: {
-    port: 3000,
-    open: true,
+    // Configure headers for PDF files
+    headers: {
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+      'Cross-Origin-Opener-Policy': 'same-origin'
+    },
+    fs: {
+      // Allow serving PDF files from src/data
+      allow: ['..', './src/data']
+    }
   },
-  build: {
-    outDir: 'dist',
-    sourcemap: true,
-  },
+  // Handle PDF file imports
+  assetsInclude: ['**/*.pdf']
 }) 

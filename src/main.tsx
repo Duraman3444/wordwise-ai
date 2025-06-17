@@ -2,6 +2,12 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
+// Initialize PDF worker for PDF parsing
+import './utils/pdfWorker'
+// Test PDF parsing in development
+import './utils/testPDFParsing'
+// Test grammar fixes
+import './utils/testGrammarFixes'
 
 // Error boundary for development
 if (import.meta.env.DEV) {

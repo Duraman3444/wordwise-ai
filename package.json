@@ -12,12 +12,19 @@
     "deploy": "npm run build && firebase deploy"
   },
   "dependencies": {
+    "@tiptap/extension-highlight": "^2.14.0",
+    "@tiptap/extension-typography": "^2.14.0",
+    "@tiptap/extension-underline": "^2.14.0",
+    "@tiptap/react": "^2.14.0",
+    "@tiptap/starter-kit": "^2.14.0",
     "compromise": "^14.14.4",
     "firebase": "^10.14.1",
     "framer-motion": "^10.16.0",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.263.1",
     "openai": "^4.0.0",
+    "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^5.3.31",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-firebase-hooks": "^5.1.1",
@@ -31,6 +38,7 @@
   },
   "devDependencies": {
     "@types/lodash.debounce": "^4.0.7",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
     "@types/uuid": "^9.0.2",
