@@ -6,13 +6,13 @@ import { useAuthStore } from '../store/authStore'
 import { User, UserPreferences } from '../types'
 import { demoAuthService, DemoUser } from '../services/demoAuth'
 
-interface AuthContextType {
+export interface AuthContextType {
   login: (email: string, password: string, stayLoggedIn?: boolean) => Promise<void>
   register: (email: string, password: string, name: string) => Promise<void>
   logout: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
@@ -59,13 +59,13 @@ const createDefaultPreferences = (): UserPreferences => ({
 })
 
 // Helper function to check for persistent login
-const checkPersistentLogin = async (login: (email: string, password: string) => Promise<void>) => {
+const checkPersistentLogin = async () => {
   const stayLoggedIn = localStorage.getItem('wordwise-stay-logged-in')
   const autoLoginData = localStorage.getItem('wordwise-auto-login')
   
   if (stayLoggedIn === 'true' && autoLoginData) {
     try {
-      const { email, timestamp } = JSON.parse(autoLoginData)
+      const { timestamp } = JSON.parse(autoLoginData)
       const now = Date.now()
       const dayInMs = 24 * 60 * 60 * 1000
       const maxAge = 30 * dayInMs // 30 days
@@ -98,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Check for persistent login first
     const initializeAuth = async () => {
-      const shouldAutoLogin = await checkPersistentLogin(login)
+      const shouldAutoLogin = await checkPersistentLogin()
       
       if (isDemoMode) {
         console.log('🧪 Using demo authentication mode')

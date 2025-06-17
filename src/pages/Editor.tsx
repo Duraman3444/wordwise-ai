@@ -519,14 +519,14 @@ ${content.replace(/\n/g, '\\par ')}
                 onClick={() => setShowSettings(!showSettings)}
               >
                 <Settings className="h-4 w-4 mr-2" />Settings
-              </Button>
+            </Button>
               {showSettings && (
                 <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4 z-50">
                   <h3 className="font-semibold mb-3">Editor Settings</h3>
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-medium mb-1">Font Family</label>
-                      <select
+                      <select 
                         value={fontFamily}
                         onChange={(e) => setFontFamily(e.target.value)}
                         className="w-full p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600"
@@ -551,11 +551,11 @@ ${content.replace(/\n/g, '\\par ')}
                       <span className="text-sm text-gray-500">{fontSize}px</span>
                     </div>
                     <div className="flex items-center">
-                                             <input
-                         type="checkbox"
+                      <input
+                        type="checkbox"
                          id="autoSave"
-                         checked={isAutoSaveEnabled}
-                         onChange={(e) => setIsAutoSaveEnabled(e.target.checked)}
+                        checked={isAutoSaveEnabled}
+                        onChange={(e) => setIsAutoSaveEnabled(e.target.checked)}
                          className="mr-2"
                        />
                       <label htmlFor="autoSave" className="text-sm">Enable Auto-save</label>
@@ -572,7 +572,7 @@ ${content.replace(/\n/g, '\\par ')}
                 onClick={() => setShowExportMenu(!showExportMenu)}
               >
                 <Download className="h-4 w-4 mr-2" />Export
-              </Button>
+            </Button>
               {showExportMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
                   <button
@@ -603,7 +603,7 @@ ${content.replace(/\n/g, '\\par ')}
             </Button>
           </div>
         </div>
-                    
+
         <div className="grid lg:grid-cols-12 gap-8">
           <div className="lg:col-span-8">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
@@ -614,12 +614,12 @@ ${content.replace(/\n/g, '\\par ')}
                         <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleMark('underline').run()} className={editor.isActive('underline') ? 'bg-gray-200 dark:bg-gray-700' : ''}><Underline className="h-4 w-4"/></Button>
                         <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={editor.isActive('bulletList') ? 'bg-gray-200 dark:bg-gray-700' : ''}><List className="h-4 w-4"/></Button>
                         <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={editor.isActive('orderedList') ? 'bg-gray-200 dark:bg-gray-700' : ''}><ListOrdered className="h-4 w-4"/></Button>
-                </div>
-              )}
+          </div>
+        )}
               <EditorContent editor={editor} />
-            </div>
-            </div>
-            
+          </div>
+                  </div>
+                  
           <div className="lg:col-span-4">
             <div className="sticky top-8">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4">
