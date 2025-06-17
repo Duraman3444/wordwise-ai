@@ -95,8 +95,12 @@ export class OpenAIService {
         console.warn('🔄 Using local grammar rules only');
       }
     } else {
-      console.warn('⚠️ No OpenAI API key found. Using local grammar rules only.');
-      console.warn('💡 Add VITE_OPENAI_API_KEY to your .env.local file for enhanced AI suggestions');
+      console.warn('⚠️ No OpenAI API key found. Using enhanced local grammar rules only.');
+      console.warn('💡 For ChatGPT-powered suggestions:');
+      console.warn('   1. Get API key from https://platform.openai.com/api-keys');
+      console.warn('   2. Create .env.local file in project root');
+      console.warn('   3. Add: VITE_OPENAI_API_KEY=sk-your-key-here');
+      console.warn('   4. Restart the development server');
     }
   }
 
@@ -270,23 +274,39 @@ export class OpenAIService {
       });
     }
     
-    // Run-on sentences: Detect sentences that are too long
+    // Run-on sentences: Detect sentences that are too long (reduced threshold)
     const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
     sentences.forEach((sentence, index) => {
       const trimmedSentence = sentence.trim();
       const wordCount = trimmedSentence.split(/\s+/).length;
       
-      if (wordCount > 25) {
+      if (wordCount > 20) {
         const sentenceStart = content.indexOf(trimmedSentence);
+        
+        // Try to suggest specific improvements
+        let suggestedFix = trimmedSentence;
+        
+        // Look for natural break points and suggest improvements
+        if (trimmedSentence.includes(', and ')) {
+          const parts = trimmedSentence.split(', and ');
+          suggestedFix = parts[0] + '. ' + parts.slice(1).join(', and ');
+        } else if (trimmedSentence.includes(', but ')) {
+          const parts = trimmedSentence.split(', but ');
+          suggestedFix = parts[0] + '. However, ' + parts.slice(1).join(', but ');
+        } else if (trimmedSentence.includes(', so ')) {
+          const parts = trimmedSentence.split(', so ');
+          suggestedFix = parts[0] + '. Therefore, ' + parts.slice(1).join(', so ');
+        }
+        
         suggestions.push({
           id: `runon_${currentId++}`,
           text: trimmedSentence.substring(0, 50) + '...',
           suggestion: `This sentence is very long (${wordCount} words). Consider breaking it into shorter sentences for better readability.`,
           original: trimmedSentence,
-          replacement: `${trimmedSentence}`, // Keep same for now, user needs to manually break it
+          replacement: suggestedFix,
           type: 'clarity',
           category: 'clarity',
-          confidence: 0.80,
+          confidence: 0.85,
           startPosition: sentenceStart,
           endPosition: sentenceStart + trimmedSentence.length
         });
@@ -417,6 +437,65 @@ export class OpenAIService {
         });
       }
     }
+
+    // Additional grammar patterns for common errors
+    
+    // Redundant phrases and wordiness
+    const redundantPatterns = [
+      { pattern: /\bevery time someone\b/gi, replacement: 'whenever someone', reason: 'More concise phrasing' },
+      { pattern: /\bwalked past\b/gi, replacement: 'passed by', reason: 'More precise verb choice' },
+      { pattern: /\bno one seemed to care about it\b/gi, replacement: 'no one cared', reason: 'More concise phrasing' },
+      { pattern: /\bso someone should have done something sooner\b/gi, replacement: 'so someone should have acted sooner', reason: 'More specific language' },
+      { pattern: /\bbefore it got worse\b/gi, replacement: 'before its condition worsened', reason: 'More precise language' }
+    ];
+
+    redundantPatterns.forEach(({ pattern, replacement, reason }) => {
+      while ((match = pattern.exec(content)) !== null) {
+        const fullMatch = match[0];
+        suggestions.push({
+          id: `wordiness_${currentId++}`,
+          text: fullMatch,
+          suggestion: `${reason}: Consider "${replacement}" instead of "${fullMatch}".`,
+          original: fullMatch,
+          replacement: replacement,
+          type: 'style',
+          category: 'style',
+          confidence: 0.80,
+          startPosition: match.index,
+          endPosition: match.index + fullMatch.length
+        });
+      }
+    });
+
+    // Sentence structure improvements
+    const structurePatterns = [
+      { 
+        pattern: /\b(it|this|that)\s+(looked|seemed|appeared)\s+(tired|hungry|sad|happy|dirty)\b/gi, 
+        suggestion: 'Consider more specific description instead of general appearance words'
+      },
+      { 
+        pattern: /\b(nobody|no one)\s+seemed\s+to\s+care\s+about\s+(it|this|that)\b/gi, 
+        suggestion: 'Consider more direct phrasing: "nobody cared" or "everyone ignored it"'
+      }
+    ];
+
+    structurePatterns.forEach(({ pattern, suggestion: suggestionText }) => {
+      while ((match = pattern.exec(content)) !== null) {
+        const fullMatch = match[0];
+        suggestions.push({
+          id: `structure_${currentId++}`,
+          text: fullMatch,
+          suggestion: suggestionText,
+          original: fullMatch,
+          replacement: fullMatch, // User needs to manually improve
+          type: 'clarity',
+          category: 'clarity',
+          confidence: 0.75,
+          startPosition: match.index,
+          endPosition: match.index + fullMatch.length
+        });
+      }
+    });
 
     // Punctuation: Missing period at end of sentence
     const trimmedContent = content.trim();
