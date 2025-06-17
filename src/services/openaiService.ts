@@ -208,6 +208,53 @@ export class OpenAIService {
       });
     }
     
+    // Run-on sentences: Detect sentences that are too long
+    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    sentences.forEach((sentence, index) => {
+      const trimmedSentence = sentence.trim();
+      const wordCount = trimmedSentence.split(/\s+/).length;
+      
+      if (wordCount > 25) {
+        const sentenceStart = content.indexOf(trimmedSentence);
+        suggestions.push({
+          id: `runon_${currentId++}`,
+          text: trimmedSentence.substring(0, 50) + '...',
+          suggestion: `This sentence is very long (${wordCount} words). Consider breaking it into shorter sentences for better readability.`,
+          original: trimmedSentence,
+          replacement: `${trimmedSentence}`, // Keep same for now, user needs to manually break it
+          type: 'clarity',
+          category: 'clarity',
+          confidence: 0.80,
+          startPosition: sentenceStart,
+          endPosition: sentenceStart + trimmedSentence.length
+        });
+      }
+    });
+
+    // Punctuation: Missing commas in lists
+    const listPattern = /\b(\w+)\s+(\w+)\s+and\s+(\w+)\b/gi;
+    while ((match = listPattern.exec(content)) !== null) {
+      const fullMatch = match[0];
+      const word1 = match[1];
+      const word2 = match[2];
+      const word3 = match[3];
+      
+      if (!fullMatch.includes(',')) {
+        suggestions.push({
+          id: `comma_list_${currentId++}`,
+          text: fullMatch,
+          suggestion: `Use commas to separate items in a list: "${word1}, ${word2}, and ${word3}".`,
+          original: fullMatch,
+          replacement: `${word1}, ${word2}, and ${word3}`,
+          type: 'grammar',
+          category: 'grammar',
+          confidence: 0.88,
+          startPosition: match.index,
+          endPosition: match.index + fullMatch.length
+        });
+      }
+    }
+
     // Punctuation: Missing comma before coordinating conjunctions
     const compoundPattern = /([a-zA-Z, ]+[a-zA-Z])( (?:and|but|or|so|for|nor|yet) )([a-zA-Z].*)/gi;
     while ((match = compoundPattern.exec(content)) !== null) {
@@ -230,6 +277,81 @@ export class OpenAIService {
           type: 'grammar', category: 'grammar', confidence: 0.85,
           startPosition: match.index,
           endPosition: match.index + originalPhrase.length
+        });
+      }
+    }
+
+    // Unclear pronoun references
+    const pronounPattern = /\b(it|this|that|they|them|these|those)\b/gi;
+    let pronounCount = 0;
+    while ((match = pronounPattern.exec(content)) !== null && pronounCount < 3) {
+      const pronoun = match[0];
+      const contextBefore = content.substring(Math.max(0, match.index - 20), match.index);
+      const contextAfter = content.substring(match.index, Math.min(content.length, match.index + 20));
+      
+      // Simple heuristic: if pronoun appears in a long sentence, it might be unclear
+      if (contextBefore.length > 15 && !contextBefore.includes('.') && !contextBefore.includes('!') && !contextBefore.includes('?')) {
+        suggestions.push({
+          id: `pronoun_${currentId++}`,
+          text: pronoun,
+          suggestion: `The pronoun "${pronoun}" may be unclear. Consider replacing it with the specific noun it refers to.`,
+          original: pronoun,
+          replacement: pronoun, // Keep same, user needs to replace manually
+          type: 'clarity',
+          category: 'clarity',
+          confidence: 0.70,
+          startPosition: match.index,
+          endPosition: match.index + pronoun.length
+        });
+        pronounCount++;
+      }
+    }
+
+    // Subject-verb agreement issues
+    const svAgreementPatterns = [
+      { pattern: /\b(is|was)\s+(they|we|you)\b/gi, suggestion: "Use 'are' or 'were' with plural subjects." },
+      { pattern: /\b(are|were)\s+(he|she|it)\b/gi, suggestion: "Use 'is' or 'was' with singular subjects." },
+      { pattern: /\b(don't|doesn't)\s+(he|she|it)\b/gi, suggestion: "Use 'doesn't' with singular subjects." }
+    ];
+
+    svAgreementPatterns.forEach(({ pattern, suggestion: suggestionText }) => {
+      while ((match = pattern.exec(content)) !== null) {
+        const fullMatch = match[0];
+        suggestions.push({
+          id: `sv_agreement_${currentId++}`,
+          text: fullMatch,
+          suggestion: suggestionText,
+          original: fullMatch,
+          replacement: fullMatch, // User needs to fix manually
+          type: 'grammar',
+          category: 'grammar',
+          confidence: 0.85,
+          startPosition: match.index,
+          endPosition: match.index + fullMatch.length
+        });
+      }
+    });
+
+    // Missing articles (a, an, the)
+    const articlePattern = /\b(is|was|has|have)\s+([A-Z][a-z]+)\b/g;
+    while ((match = articlePattern.exec(content)) !== null) {
+      const verb = match[1];
+      const noun = match[2];
+      const fullMatch = match[0];
+      
+      // Simple heuristic: if it's a common noun (starts with capital but not proper noun)
+      if (!this.properNouns.has(noun.toLowerCase()) && !this.daysMonths.has(noun.toLowerCase())) {
+        suggestions.push({
+          id: `article_${currentId++}`,
+          text: fullMatch,
+          suggestion: `Consider adding an article before "${noun}". Example: "${verb} a ${noun}" or "${verb} the ${noun}".`,
+          original: fullMatch,
+          replacement: `${verb} a ${noun}`,
+          type: 'grammar',
+          category: 'grammar',
+          confidence: 0.75,
+          startPosition: match.index,
+          endPosition: match.index + fullMatch.length
         });
       }
     }
