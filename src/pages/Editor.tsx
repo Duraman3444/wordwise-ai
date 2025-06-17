@@ -177,24 +177,36 @@ export const Editor: React.FC = () => {
 
     const replacement = issue.replacement ?? '';
     
-    // Simple and reliable text replacement
+    // More robust text replacement
     if (issue.original && replacement) {
+      const currentHTML = editor.getHTML();
       const currentText = editor.getText();
       
-      // Find and replace the text
+      // Find and replace the text while preserving HTML structure
       if (currentText.includes(issue.original)) {
-        const newText = currentText.replace(issue.original, replacement);
+        // Use position-based replacement for precision
+        const textContent = editor.getText();
+        const startIndex = textContent.indexOf(issue.original);
         
-        // Update the editor content
-        editor.chain()
-          .clearContent()
-          .insertContent(`<p>${newText}</p>`)
-          .run();
+        if (startIndex !== -1) {
+          const from = startIndex + 1; // TipTap uses 1-based indexing
+          const to = from + issue.original.length;
           
-        // Re-analyze content after replacement
-        setTimeout(() => {
-          analyzeContentWithAI(editor.getText());
-        }, 300);
+          // Use TipTap's built-in text replacement
+          editor.chain()
+            .focus()
+            .setTextSelection({ from, to })
+            .insertContent(replacement)
+            .run();
+            
+          // Mark suggestion as dismissed
+          setDismissedSuggestions(prev => new Set([...prev, issue.id]));
+          
+          // Re-analyze content after replacement
+          setTimeout(() => {
+            analyzeContentWithAI(editor.getText());
+          }, 500);
+        }
       }
     } else if (issue.startPosition !== undefined && issue.endPosition !== undefined && replacement) {
       // Fallback to position-based replacement for edge cases
@@ -208,14 +220,14 @@ export const Editor: React.FC = () => {
           .insertContent(replacement)
           .run();
           
+        // Mark suggestion as dismissed
+        setDismissedSuggestions(prev => new Set([...prev, issue.id]));
+          
         setTimeout(() => {
           analyzeContentWithAI(editor.getText());
-        }, 300);
+        }, 500);
       }
     }
-
-    // Mark suggestion as dismissed
-    setDismissedSuggestions(prev => new Set(prev).add(issue.id));
   };
 
   const handleRejectSuggestion = (suggestionId: string) => {
