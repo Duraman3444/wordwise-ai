@@ -72,8 +72,32 @@ export class OpenAIService {
     ['nice', ['pleasant', 'delightful', 'wonderful', 'charming', 'appealing']],
   ]);
 
+  private openai: any;
+
   constructor() {
-    console.warn('🚨 Using comprehensive mock AI service. Backend implementation needed for production.');
+    // Try to initialize OpenAI if API key is available
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    if (apiKey && apiKey.startsWith('sk-')) {
+      try {
+        // Dynamic import to avoid issues if openai package is not available
+        import('openai').then(OpenAI => {
+          this.openai = new OpenAI.default({
+            apiKey: apiKey,
+            dangerouslyAllowBrowser: true // Note: In production, use a backend proxy
+          });
+          console.log('✅ OpenAI API initialized successfully');
+        }).catch(error => {
+          console.warn('❌ Failed to initialize OpenAI:', error);
+          console.warn('🔄 Falling back to local grammar rules');
+        });
+      } catch (error) {
+        console.warn('❌ OpenAI initialization failed:', error);
+        console.warn('🔄 Using local grammar rules only');
+      }
+    } else {
+      console.warn('⚠️ No OpenAI API key found. Using local grammar rules only.');
+      console.warn('💡 Add VITE_OPENAI_API_KEY to your .env.local file for enhanced AI suggestions');
+    }
   }
 
   async analyzeText(content: string): Promise<AIAnalysisResult> {
@@ -84,9 +108,47 @@ export class OpenAIService {
       };
     }
 
-    await new Promise(resolve => setTimeout(resolve, 1200));
-
     const wordCount = content.split(/\s+/).filter(Boolean).length;
+    
+    // Try OpenAI first if available, otherwise fall back to local rules
+    if (this.openai) {
+      try {
+        console.log('🤖 Using OpenAI ChatGPT for grammar analysis...');
+        const aiSuggestions = await this.analyzeWithOpenAI(content);
+        
+        // Combine with local rules for comprehensive coverage
+        const localSuggestions = this.analyzeWithGrammarHandbook(content);
+        const allSuggestions = [...aiSuggestions, ...localSuggestions];
+        const dedupedSuggestions = this.deduplicateSuggestions(allSuggestions);
+        
+        const grammarIssues = dedupedSuggestions.filter((s) => s.type === 'grammar');
+        const vocabularyIssues = dedupedSuggestions.filter((s) => s.type === 'vocabulary');
+        const clarityIssues = dedupedSuggestions.filter((s) => s.type === 'clarity');
+        const styleIssues = dedupedSuggestions.filter((s) => s.type === 'style');
+        const spellingIssues = dedupedSuggestions.filter((s) => s.type === 'spelling');
+        
+        const totalDeductions = 
+            (grammarIssues.length * 10) +
+            (spellingIssues.length * 8) + 
+            (vocabularyIssues.length * 6) +
+            (clarityIssues.length * 4) +
+            (styleIssues.length * 2);
+        
+        const overallScore = Math.max(0, 100 - totalDeductions);
+        
+        return {
+          grammarIssues, vocabularyIssues, clarityIssues, styleIssues, spellingIssues,
+          overallScore, hasContent: wordCount > 0, wordCount
+        };
+      } catch (error) {
+        console.warn('❌ OpenAI analysis failed, using local rules:', error);
+      }
+    }
+
+    // Fallback to local analysis
+    await new Promise(resolve => setTimeout(resolve, 800));
+    console.log('📚 Using local grammar rules...');
+    
     const suggestions = this.analyzeWithGrammarHandbook(content);
     
     const grammarIssues = suggestions.filter((s) => s.type === 'grammar');
@@ -389,6 +451,77 @@ export class OpenAIService {
           startPosition: match.index, endPosition: match.index + word.length
         });
       }
+    }
+  }
+
+  private async analyzeWithOpenAI(content: string): Promise<AISuggestion[]> {
+    if (!this.openai) return [];
+
+    try {
+      const prompt = `You are a professional grammar and style checker. Analyze the following text and provide specific suggestions for improvement. For each issue found, provide:
+
+1. The exact text that needs to be changed
+2. The suggested replacement
+3. The type of issue (grammar, spelling, vocabulary, clarity, or style)
+4. A brief explanation
+
+Text to analyze: "${content}"
+
+Please respond in JSON format with an array of suggestions. Each suggestion should have:
+- "original": the exact text to replace
+- "replacement": the corrected text
+- "type": one of "grammar", "spelling", "vocabulary", "clarity", "style"
+- "suggestion": brief explanation of the issue
+- "confidence": number between 0 and 1
+
+Focus on:
+- Grammar errors (subject-verb agreement, tense consistency, etc.)
+- Punctuation issues (missing commas, periods, etc.)
+- Spelling mistakes
+- Clarity improvements (run-on sentences, unclear pronouns)
+- Style improvements (word choice, sentence structure)
+
+Return only valid JSON array format.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "You are a professional grammar and writing assistant. Respond only with valid JSON."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 1500
+      });
+
+      const aiResponse = response.choices[0]?.message?.content;
+      if (!aiResponse) return [];
+
+      // Parse the JSON response
+      const suggestions = JSON.parse(aiResponse);
+      
+      // Convert to our AISuggestion format
+      return suggestions.map((suggestion: any, index: number) => ({
+        id: `ai_${index + 1}`,
+        text: suggestion.original || '',
+        suggestion: suggestion.suggestion || '',
+        original: suggestion.original || '',
+        replacement: suggestion.replacement || '',
+        type: suggestion.type || 'grammar',
+        category: suggestion.type || 'grammar',
+        confidence: suggestion.confidence || 0.8,
+        startPosition: content.indexOf(suggestion.original || ''),
+        endPosition: content.indexOf(suggestion.original || '') + (suggestion.original || '').length
+      })).filter((s: AISuggestion) => s.original && s.replacement);
+
+    } catch (error) {
+      console.error('OpenAI analysis error:', error);
+      return [];
     }
   }
 
