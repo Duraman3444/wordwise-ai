@@ -19,12 +19,13 @@ This is a 7-day MVP development project that builds a Grammarly clone enhanced w
 ## ✨ Key Features
 
 ### Core MVP Features
-- 📝 **Real-time Grammar Checking** - AI-powered grammar analysis with educational explanations
+- 🤖 **ChatGPT-Powered Grammar Checking** - Advanced AI analysis using OpenAI's GPT models with educational explanations
 - 🎯 **Vocabulary Enhancement** - Context-appropriate vocabulary suggestions for academic writing
 - 🔍 **Clarity Improvements** - Sentence structure analysis and rewriting suggestions
 - 🎨 **Academic Tone Guidance** - Formality detection and professional tone suggestions
 - 📊 **Progress Tracking** - Writing improvement analytics and performance metrics
 - 🧠 **Educational Feedback** - Detailed explanations to help students learn
+- ⚡ **Hybrid Analysis** - Combines ChatGPT intelligence with local grammar rules for comprehensive coverage
 
 ### AI-Powered Capabilities
 - **Context-Aware Analysis** - Understands document type and user intent
@@ -78,16 +79,17 @@ This is a 7-day MVP development project that builds a Grammarly clone enhanced w
 
 3. **Set up environment variables**
    ```bash
-   # Copy the environment template
-   cp .env.example .env.local
-   
-   # Edit .env.local with your actual values
-   VITE_OPENAI_API_KEY=your_openai_api_key_here
-   VITE_FIREBASE_API_KEY=your_firebase_api_key
-   VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-   VITE_FIREBASE_PROJECT_ID=your_project_id
+   # Create .env.local file with your API keys
+   echo "VITE_OPENAI_API_KEY=sk-your-openai-api-key-here" > .env.local
+   echo "VITE_FIREBASE_API_KEY=your_firebase_api_key" >> .env.local
    # ... add other Firebase config values
    ```
+   
+   **🔑 Get OpenAI API Key** (for enhanced grammar checking):
+   - Visit [OpenAI Platform](https://platform.openai.com/api-keys)
+   - Create account and generate API key
+   - Add to `.env.local` file
+   - **Note**: App works with local rules if no API key provided
 
 4. **Initialize Firebase**
    ```bash
