@@ -16,7 +16,7 @@ import {
   RotateCcw,
   Bold,
   Italic,
-  Underline,
+  Underline as UnderlineIcon,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -126,6 +126,7 @@ export const Editor: React.FC = () => {
     if(editor && aiAnalysis) {
         const { state, view } = editor;
         const { tr } = state;
+        const currentText = editor.getText();
 
         // Clear previous highlights first
         tr.removeMark(0, state.doc.content.size, editor.schema.marks.suggestionMark);
@@ -136,20 +137,33 @@ export const Editor: React.FC = () => {
           ...(aiAnalysis.vocabularyIssues || []),
           ...(aiAnalysis.clarityIssues || []),
           ...(aiAnalysis.styleIssues || []),
-        ];
+        ].filter(issue => !dismissedSuggestions.has(issue.id));
 
-        // Apply new highlights
+        // Apply new highlights using text-based approach for consistency
         allIssues.forEach(issue => {
-          const from = issue.startPosition !== undefined ? issue.startPosition + 1 : -1;
-          const to = issue.endPosition !== undefined ? issue.endPosition + 1 : -1;
-    
-          if (from >= 1 && to >= 1 && to <= editor.state.doc.content.size) {
-            tr.addMark(from, to, editor.schema.marks.suggestionMark.create({ 'data-suggestion-type': issue.type }));
+          if (issue.original) {
+            const originalIndex = currentText.indexOf(issue.original);
+            if (originalIndex !== -1) {
+              const from = originalIndex + 1;
+              const to = from + issue.original.length;
+              
+              if (from >= 1 && to >= 1 && to <= editor.state.doc.content.size) {
+                tr.addMark(from, to, editor.schema.marks.suggestionMark.create({ 'data-suggestion-type': issue.type }));
+              }
+            }
+          } else if (issue.startPosition !== undefined && issue.endPosition !== undefined) {
+            // Fallback to position-based highlighting
+            const from = issue.startPosition + 1;
+            const to = issue.endPosition + 1;
+      
+            if (from >= 1 && to >= 1 && to <= editor.state.doc.content.size) {
+              tr.addMark(from, to, editor.schema.marks.suggestionMark.create({ 'data-suggestion-type': issue.type }));
+            }
           }
         });
         view.dispatch(tr);
     }
-  }, [aiAnalysis, editor]);
+  }, [aiAnalysis, editor, dismissedSuggestions]);
   
   useEffect(() => {
     if (editor) {
@@ -161,18 +175,49 @@ export const Editor: React.FC = () => {
   const handleAcceptSuggestion = (issue: AISuggestion) => {
     if (!editor) return;
 
-    const from = issue.startPosition !== undefined ? issue.startPosition + 1 : -1;
-    const to = issue.endPosition !== undefined ? issue.endPosition + 1 : -1;
     const replacement = issue.replacement ?? '';
     
-    if (from === -1 || to === -1) {
-        console.error("Cannot apply suggestion due to missing position:", issue);
-        return;
+    // If we have the original text, find and replace it
+    if (issue.original) {
+      const currentText = editor.getText();
+      const originalIndex = currentText.indexOf(issue.original);
+      
+      if (originalIndex !== -1) {
+        // Convert text position to document position
+        const from = originalIndex + 1; // TipTap positions start at 1
+        const to = from + issue.original.length;
+        
+        // Apply the replacement
+        editor.chain().focus()
+          .setTextSelection({ from, to })
+          .insertContent(replacement)
+          .run();
+          
+        // Re-analyze content after replacement to update suggestions
+        setTimeout(() => {
+          analyzeContentWithAI(editor.getText());
+        }, 100);
+      } else {
+        console.warn("Could not find original text to replace:", issue.original);
+      }
+    } else if (issue.startPosition !== undefined && issue.endPosition !== undefined) {
+      // Fallback to position-based replacement
+      const from = issue.startPosition + 1;
+      const to = issue.endPosition + 1;
+      
+      editor.chain().focus()
+        .setTextSelection({ from, to })
+        .insertContent(replacement)
+        .run();
+        
+      // Re-analyze content after replacement
+      setTimeout(() => {
+        analyzeContentWithAI(editor.getText());
+      }, 100);
+    } else {
+      console.error("Cannot apply suggestion - missing position or original text:", issue);
+      return;
     }
-
-    editor.chain().focus()
-      .insertContentAt({ from, to }, replacement)
-      .run();
 
     setDismissedSuggestions(prev => new Set(prev).add(issue.id));
   };
@@ -611,7 +656,7 @@ ${content.replace(/\n/g, '\\par ')}
                     <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex items-center space-x-2">
                         <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={editor.isActive('bold') ? 'bg-gray-200 dark:bg-gray-700' : ''}><Bold className="h-4 w-4"/></Button>
                         <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={editor.isActive('italic') ? 'bg-gray-200 dark:bg-gray-700' : ''}><Italic className="h-4 w-4"/></Button>
-                        <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleMark('underline').run()} className={editor.isActive('underline') ? 'bg-gray-200 dark:bg-gray-700' : ''}><Underline className="h-4 w-4"/></Button>
+                        <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleMark('underline').run()} className={editor.isActive('underline') ? 'bg-gray-200 dark:bg-gray-700' : ''}><UnderlineIcon className="h-4 w-4"/></Button>
                         <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={editor.isActive('bulletList') ? 'bg-gray-200 dark:bg-gray-700' : ''}><List className="h-4 w-4"/></Button>
                         <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={editor.isActive('orderedList') ? 'bg-gray-200 dark:bg-gray-700' : ''}><ListOrdered className="h-4 w-4"/></Button>
           </div>
