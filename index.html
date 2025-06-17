@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="WordWise AI - Write with confidence. Edit with intelligence." />
+    <title>WordWise AI - AI-Powered Writing Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Theme script to prevent flash -->
+    <script>
+      (function() {
+        try {
+          var savedTheme = localStorage.getItem('wordwise-theme');
+          if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark')) {
+            document.documentElement.className = savedTheme;
+          } else {
+            // Check system preference
+            var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.className = prefersDark ? 'dark' : 'light';
+          }
+        } catch (e) {
+          // Fallback to light mode if there's any error
+          document.documentElement.className = 'light';
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html> 
