@@ -1,15 +1,18 @@
-import OpenAI from 'openai'
-import { Suggestion, SuggestionType, TextPosition, AIAnalysis } from '@/types'
+// WARNING: OpenAI API keys should NEVER be exposed to client-side code
+// This implementation needs to be moved to a secure backend/serverless function
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true, // Note: In production, use server-side API
-})
+// Initialize OpenAI client - MOVED TO BACKEND
+// const openai = new OpenAI({
+//   apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+//   dangerouslyAllowBrowser: true, // Note: In production, use server-side API
+// })
+
+import { Suggestion, SuggestionType, TextPosition, AIAnalysis } from '@/types'
 
 export class AIService {
   /**
    * Analyze text and generate suggestions
+   * TODO: Move this to a secure backend endpoint
    */
   static async analyzeText(
     text: string,
@@ -17,33 +20,28 @@ export class AIService {
     documentType: string = 'essay'
   ): Promise<Suggestion[]> {
     try {
-      const prompt = this.buildAnalysisPrompt(text, userType, documentType)
-      
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: this.getSystemPrompt(userType, documentType)
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 2000,
-      })
+      // TODO: Replace with secure backend API call
+      const response = await fetch('/api/analyze-text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text,
+          userType,
+          documentType
+        })
+      });
 
-      const analysisResult = response.choices[0]?.message?.content
-      if (!analysisResult) {
-        throw new Error('No analysis result received')
+      if (!response.ok) {
+        throw new Error('Failed to analyze text');
       }
 
-      return this.parseSuggestions(analysisResult, text)
+      const data = await response.json();
+      return this.parseSuggestions(data.analysisResult, text);
     } catch (error) {
-      console.error('AI Analysis error:', error)
-      throw new Error('Failed to analyze text with AI')
+      console.error('AI Analysis error:', error);
+      throw new Error('Failed to analyze text with AI');
     }
   }
 
