@@ -20,8 +20,8 @@ export class AIService {
     documentType: string = 'essay'
   ): Promise<Suggestion[]> {
     try {
-      // TODO: Replace with secure backend API call
-      const response = await fetch('/api/analyze-text', {
+      // Use secure Firebase Function endpoint
+      const response = await fetch('https://analyzetext-7d2ertcnaa-uc.a.run.app', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,30 +54,33 @@ export class AIService {
     documentType: string = 'essay'
   ): Promise<AIAnalysis> {
     try {
-      const prompt = this.buildFullAnalysisPrompt(text, userType, documentType)
+      // TODO: Implement with secure backend endpoint
+      throw new Error('Full analysis feature requires backend implementation')
       
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: this.getAnalysisSystemPrompt(userType, documentType)
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.2,
-        max_tokens: 3000,
-      })
-
-      const analysisResult = response.choices[0]?.message?.content
-      if (!analysisResult) {
-        throw new Error('No analysis result received')
-      }
-
-      return this.parseFullAnalysis(analysisResult, text)
+      // const prompt = this.buildFullAnalysisPrompt(text, userType, documentType)
+      // 
+      // const response = await openai.chat.completions.create({
+      //   model: 'gpt-4',
+      //   messages: [
+      //     {
+      //       role: 'system',
+      //       content: this.getAnalysisSystemPrompt(userType, documentType)
+      //     },
+      //     {
+      //       role: 'user',
+      //       content: prompt
+      //     }
+      //   ],
+      //   temperature: 0.2,
+      //   max_tokens: 3000,
+      // })
+      //
+      // const analysisResult = response.choices[0]?.message?.content
+      // if (!analysisResult) {
+      //   throw new Error('No analysis result received')
+      // }
+      //
+      // return this.parseFullAnalysis(analysisResult, text)
     } catch (error) {
       console.error('AI Full Analysis error:', error)
       throw new Error('Failed to generate comprehensive analysis')
@@ -93,25 +96,28 @@ export class AIService {
     userType: 'student' | 'professional' | 'creator' = 'student'
   ): Promise<string> {
     try {
-      const prompt = this.buildImprovementPrompt(text, improvementType, userType)
+      // TODO: Implement with secure backend endpoint
+      throw new Error('Text improvement feature requires backend implementation')
       
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: this.getImprovementSystemPrompt(improvementType, userType)
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.4,
-        max_tokens: 1500,
-      })
-
-      return response.choices[0]?.message?.content || text
+      // const prompt = this.buildImprovementPrompt(text, improvementType, userType)
+      // 
+      // const response = await openai.chat.completions.create({
+      //   model: 'gpt-4',
+      //   messages: [
+      //     {
+      //       role: 'system',
+      //       content: this.getImprovementSystemPrompt(improvementType, userType)
+      //     },
+      //     {
+      //       role: 'user',
+      //       content: prompt
+      //     }
+      //   ],
+      //   temperature: 0.4,
+      //   max_tokens: 1500,
+      // })
+      //
+      // return response.choices[0]?.message?.content || text
     } catch (error) {
       console.error('AI Improvement error:', error)
       throw new Error('Failed to improve text')
@@ -236,21 +242,32 @@ Return only the improved version of the text.`
   /**
    * Parse suggestions from AI response
    */
-  private static parseSuggestions(response: string, _originalText: string): Suggestion[] {
+  private static parseSuggestions(response: any, originalText: string): Suggestion[] {
     try {
-      const parsed = JSON.parse(response)
-      return parsed.suggestions.map((s: any, index: number) => ({
-        id: `suggestion-${Date.now()}-${index}`,
-        type: s.type as SuggestionType,
-        severity: s.severity,
-        message: s.message,
-        explanation: s.explanation,
-        position: s.position as TextPosition,
-        originalText: s.originalText,
-        suggestions: s.suggestions,
-        confidence: s.confidence,
-        timestamp: new Date(),
-      }))
+      // Handle the actual ChatGPT response format from Firebase Function
+      const suggestions = Array.isArray(response) ? response : (response.suggestions || []);
+      
+      return suggestions.map((s: any, index: number) => {
+        // Create a more unique ID based on content and position
+        const uniqueId = s.id || `${s.type || 'suggestion'}-${s.originalText || ''}-${s.position?.start || index}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        return {
+          id: uniqueId,
+          type: s.type as SuggestionType,
+          severity: 'error' as const,
+          message: s.message || s.suggestion || 'Grammar suggestion',
+          explanation: s.message || s.explanation || 'Improvement suggestion',
+          position: s.position as TextPosition,
+          originalText: s.originalText || s.original || '',
+          suggestions: Array.isArray(s.suggestions) ? s.suggestions : (s.replacement ? [s.replacement] : []),
+          confidence: s.confidence || 0.8,
+          timestamp: new Date(),
+        }
+      }).filter((suggestion: Suggestion, index: number, array: Suggestion[]) => {
+        // Remove duplicate suggestions based on originalText and replacement
+        const key = `${suggestion.originalText}->${suggestion.suggestions[0] || ''}`;
+        return array.findIndex((s: Suggestion) => `${s.originalText}->${s.suggestions[0] || ''}` === key) === index;
+      });
     } catch (error) {
       console.error('Failed to parse suggestions:', error)
       return []

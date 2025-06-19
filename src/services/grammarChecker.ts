@@ -223,8 +223,23 @@ export class GrammarChecker {
     const punctuationErrors = this.checkPunctuationAndCapitalization(text)
     errors.push(...punctuationErrors.map(error => ({ ...error, id: `punct-${errorId++}` })))
 
-    console.log('Found errors:', errors)
-    return errors
+    // Filter out low-quality suggestions
+    const filteredErrors = errors.filter(error => {
+      // Don't suggest changing a word to itself
+      if (error.suggestion.length > 0 && error.suggestion[0] === text.substring(error.start, error.end)) {
+        return false;
+      }
+      
+      // Filter out vague pronoun suggestions
+      if (error.message.includes('may be unclear') && error.suggestion.length === 0) {
+        return false;
+      }
+      
+      return true;
+    });
+
+    console.log('Found errors after filtering:', filteredErrors)
+    return filteredErrors
   }
 
   private universalSpellCheck(text: string): Omit<GrammarError, 'id'>[] {

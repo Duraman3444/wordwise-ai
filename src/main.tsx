@@ -7,7 +7,7 @@ import './utils/pdfWorker'
 // Test PDF parsing in development
 import './utils/testPDFParsing'
 // Test grammar fixes
-import './utils/testGrammarFixes'
+// import './utils/testGrammarFixes' // Removed for security update
 
 // Error boundary for development
 if (import.meta.env.DEV) {

@@ -12,7 +12,7 @@ import {
   Info,
   Lightbulb
 } from 'lucide-react'
-import { OpenAIService } from '../services/openaiService'
+import { AIService } from '../services/ai'
 
 export const Demo: React.FC = () => {
   const [analysis, setAnalysis] = useState<any>(null)
@@ -40,8 +40,6 @@ export const Demo: React.FC = () => {
     },
   })
 
-  const openaiService = new OpenAIService()
-
   const handleAnalyze = async () => {
     if (!editor) return
     
@@ -50,16 +48,18 @@ export const Demo: React.FC = () => {
 
     setIsAnalyzing(true)
     try {
-      const result = await openaiService.analyzeText(content)
+      const suggestions = await AIService.analyzeText(content, 'student', 'demo')
+      // Convert AI service format to match expected format
+      const result = {
+        grammarIssues: suggestions.filter(s => s.type === 'grammar'),
+        vocabularyIssues: suggestions.filter(s => s.type === 'vocabulary'),
+        clarityIssues: suggestions.filter(s => s.type === 'clarity'),
+        styleIssues: suggestions.filter(s => s.type === 'style'),
+        spellingIssues: suggestions.filter(s => s.type === 'spelling'),
+        overallScore: Math.max(0, 100 - suggestions.length * 5)
+      }
       setAnalysis(result)
-      const allSuggestions = [
-        ...result.grammarIssues,
-        ...result.vocabularyIssues,
-        ...result.clarityIssues,
-        ...result.styleIssues,
-        ...result.spellingIssues
-      ]
-      setSuggestions(allSuggestions)
+      setSuggestions(suggestions)
     } catch (error) {
       console.error('Analysis failed:', error)
     } finally {

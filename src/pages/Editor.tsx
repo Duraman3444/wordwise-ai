@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
-import { openaiService, AISuggestion, AIAnalysisResult } from '@/services/openaiService'
+import { AIService } from '@/services/ai'
+import { Suggestion } from '@/types'
 import { 
   Save, 
   Download, 
@@ -73,7 +74,7 @@ export const Editor: React.FC = () => {
   const [fontFamily, setFontFamily] = useState('Inter')
   const [isAutoSaveEnabled, setIsAutoSaveEnabled] = useState(true)
   const [showFormatting, setShowFormatting] = useState(true)
-  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisResult | null>(null)
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [userLevel, setUserLevel] = useState<'beginner' | 'intermediate' | 'advanced'>('intermediate')
   const [isProcessingSuggestions, setIsProcessingSuggestions] = useState(false)
@@ -83,6 +84,9 @@ export const Editor: React.FC = () => {
   const processingTimeoutRef = useRef<NodeJS.Timeout>()
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saving' | 'saved' | 'error'>('saving')
   const editorRef = useRef<TiptapEditor | null>(null)
+  const lastAnalyzedTextRef = useRef<string>('')
+  const acceptedChangesRef = useRef<Set<string>>(new Set())
+  const analysisPausedUntilRef = useRef<number>(0) // Timestamp to pause analysis until
 
   const editor = useEditor({
     extensions: [
@@ -99,10 +103,31 @@ export const Editor: React.FC = () => {
     },
     onUpdate: ({ editor }) => {
       const text = editor.getText();
+      
+      // Check if analysis is paused
+      const now = Date.now();
+      if (now < analysisPausedUntilRef.current) {
+        console.log('Analysis paused, skipping update');
+        return;
+      }
+      
+      // If the text has changed significantly, clear accepted changes
+      const currentWordCount = text.split(/\s+/).filter(Boolean).length;
+      const lastWordCount = lastAnalyzedTextRef.current.split(/\s+/).filter(Boolean).length;
+      
+      if (Math.abs(currentWordCount - lastWordCount) > 10) {
+        console.log('Text changed significantly, clearing accepted changes');
+        acceptedChangesRef.current.clear();
+        setDismissedSuggestions(new Set());
+      }
+      
       if (analysisTimeoutRef.current) clearTimeout(analysisTimeoutRef.current);
       analysisTimeoutRef.current = setTimeout(() => {
-        analyzeContentWithAI(text);
-      }, 1500);
+        // Double-check pause status before analyzing
+        if (Date.now() >= analysisPausedUntilRef.current) {
+          analyzeContentWithAI(text);
+        }
+      }, 3000);
     },
   });
 
@@ -111,12 +136,105 @@ export const Editor: React.FC = () => {
       setAiAnalysis(null);
       return;
     }
+    
+    // Check if analysis is currently paused
+    const now = Date.now();
+    if (now < analysisPausedUntilRef.current) {
+      console.log('Analysis is paused, skipping');
+      return;
+    }
+    
+    // Prevent analyzing the same text multiple times
+    if (text === lastAnalyzedTextRef.current) {
+      console.log('Skipping analysis - same text as before');
+      return;
+    }
+    
+    lastAnalyzedTextRef.current = text;
     setIsAnalyzing(true);
     try {
-      const analysis = await openaiService.analyzeText(text);
+      const suggestions = await AIService.analyzeText(text, 'professional', 'document');
+      console.log('Received suggestions:', suggestions);
+      
+      // More sophisticated filtering for already accepted suggestions
+      const filteredSuggestions = suggestions.filter(suggestion => {
+        // Check if this specific suggestion has been accepted
+        const suggestionKey = `${suggestion.originalText}->${suggestion.suggestions[0] || ''}`;
+        const isExactlyAccepted = acceptedChangesRef.current.has(suggestionKey);
+        
+        // Check if the original text still exists in the current document
+        const originalTextExists = text.includes(suggestion.originalText || '');
+        
+        // Check for similar accepted changes (to catch variations)
+        const isSimilarAccepted = Array.from(acceptedChangesRef.current).some(acceptedChange => {
+          const [acceptedOriginal] = acceptedChange.split('->');
+          // Check if this is a similar suggestion for the same text segment
+          return acceptedOriginal === suggestion.originalText || 
+                 (acceptedOriginal.length > 5 && suggestion.originalText && 
+                  acceptedOriginal.includes(suggestion.originalText.substring(0, Math.min(10, suggestion.originalText.length))));
+        });
+        
+        // For clarity suggestions, be more aggressive about filtering repeats
+        if (suggestion.type === 'clarity') {
+          // Check if we've already seen a clarity suggestion for this text segment
+          const hasRecentClaritySuggestion = Array.from(acceptedChangesRef.current).some(acceptedChange => {
+            // Check for clarity-specific tracking
+            if (acceptedChange.startsWith('clarity:')) {
+              const trackedText = acceptedChange.substring(8); // Remove 'clarity:' prefix
+              return suggestion.originalText?.includes(trackedText) || trackedText.includes(suggestion.originalText || '');
+            }
+            
+            const [acceptedOriginal] = acceptedChange.split('->');
+            // If the original text overlaps significantly, consider it redundant
+            if (!suggestion.originalText || !acceptedOriginal) return false;
+            const overlap = Math.max(
+              suggestion.originalText.indexOf(acceptedOriginal.substring(0, 15)),
+              acceptedOriginal.indexOf(suggestion.originalText.substring(0, 15))
+            );
+            return overlap >= 0;
+          });
+          
+          if (hasRecentClaritySuggestion) {
+            console.log(`Filtering out potentially redundant clarity suggestion: "${suggestion.originalText}"`);
+            return false;
+          }
+        }
+        
+        const shouldInclude = !isExactlyAccepted && !isSimilarAccepted && originalTextExists;
+        
+        if (!shouldInclude) {
+          console.log(`Filtering out suggestion: "${suggestion.originalText}" (exactlyAccepted: ${isExactlyAccepted}, similarAccepted: ${isSimilarAccepted}, textExists: ${originalTextExists})`);
+        }
+        
+        return shouldInclude;
+      });
+      
+      console.log('Filtered suggestions (removed accepted):', filteredSuggestions);
+      
+      // Convert to expected format
+      const analysis = {
+        grammarIssues: filteredSuggestions.filter(s => s.type === 'grammar'),
+        vocabularyIssues: filteredSuggestions.filter(s => s.type === 'vocabulary'),
+        clarityIssues: filteredSuggestions.filter(s => s.type === 'clarity'),
+        styleIssues: filteredSuggestions.filter(s => s.type === 'style'),
+        spellingIssues: filteredSuggestions.filter(s => s.type === 'spelling'),
+        punctuationIssues: filteredSuggestions.filter(s => s.type === 'punctuation'),
+        overallScore: Math.max(0, 100 - filteredSuggestions.length * 5)
+      };
+      
+      console.log('Processed analysis:', analysis);
       setAiAnalysis(analysis);
     } catch (error) {
       console.error('Error analyzing content:', error);
+      setAiAnalysis({
+        grammarIssues: [],
+        vocabularyIssues: [],
+        clarityIssues: [],
+        styleIssues: [],
+        spellingIssues: [],
+        punctuationIssues: [],
+        overallScore: 100
+      });
     } finally {
       setIsAnalyzing(false);
     }
@@ -137,24 +255,25 @@ export const Editor: React.FC = () => {
           ...(aiAnalysis.vocabularyIssues || []),
           ...(aiAnalysis.clarityIssues || []),
           ...(aiAnalysis.styleIssues || []),
+          ...(aiAnalysis.punctuationIssues || []),
         ].filter(issue => !dismissedSuggestions.has(issue.id));
 
         // Apply new highlights using text-based approach for consistency
         allIssues.forEach(issue => {
-          if (issue.original) {
-            const originalIndex = currentText.indexOf(issue.original);
+          if (issue.originalText) {
+            const originalIndex = currentText.indexOf(issue.originalText);
             if (originalIndex !== -1) {
               const from = originalIndex + 1;
-              const to = from + issue.original.length;
+              const to = from + issue.originalText.length;
               
               if (from >= 1 && to >= 1 && to <= editor.state.doc.content.size) {
                 tr.addMark(from, to, editor.schema.marks.suggestionMark.create({ 'data-suggestion-type': issue.type }));
               }
             }
-          } else if (issue.startPosition !== undefined && issue.endPosition !== undefined) {
+          } else if (issue.position && issue.position.start !== undefined && issue.position.end !== undefined) {
             // Fallback to position-based highlighting
-            const from = issue.startPosition + 1;
-            const to = issue.endPosition + 1;
+            const from = issue.position.start + 1;
+            const to = issue.position.end + 1;
       
             if (from >= 1 && to >= 1 && to <= editor.state.doc.content.size) {
               tr.addMark(from, to, editor.schema.marks.suggestionMark.create({ 'data-suggestion-type': issue.type }));
@@ -172,25 +291,45 @@ export const Editor: React.FC = () => {
     }
   }, [editor]);
 
-    const handleAcceptSuggestion = (issue: AISuggestion) => {
+    const handleAcceptSuggestion = (issue: Suggestion) => {
     if (!editor) return;
 
-    const replacement = issue.replacement ?? '';
+    const replacement = issue.suggestions[0] || '';
     
-    // More robust text replacement
-    if (issue.original && replacement) {
-      const currentHTML = editor.getHTML();
+    // Track multiple variations of this change to prevent re-suggesting
+    const primaryKey = `${issue.originalText}->${replacement}`;
+    acceptedChangesRef.current.add(primaryKey);
+    
+    // For clarity suggestions, also track the text segment to prevent similar suggestions
+    if (issue.type === 'clarity' && issue.originalText) {
+      // Track the original text itself to prevent similar clarity suggestions
+      acceptedChangesRef.current.add(`clarity:${issue.originalText}`);
+      
+      // If the original text is long, also track a shorter version
+      if (issue.originalText.length > 20) {
+        const shortVersion = issue.originalText.substring(0, 15);
+        acceptedChangesRef.current.add(`clarity:${shortVersion}`);
+      }
+    }
+    
+    console.log('Tracked accepted changes:', Array.from(acceptedChangesRef.current));
+    
+    // Mark suggestion as dismissed immediately
+    setDismissedSuggestions(prev => new Set([...prev, issue.id]));
+    
+    // More robust text replacement using the Suggestion type structure
+    if (issue.originalText && replacement) {
       const currentText = editor.getText();
       
       // Find and replace the text while preserving HTML structure
-      if (currentText.includes(issue.original)) {
+      if (currentText.includes(issue.originalText)) {
         // Use position-based replacement for precision
         const textContent = editor.getText();
-        const startIndex = textContent.indexOf(issue.original);
+        const startIndex = textContent.indexOf(issue.originalText);
         
         if (startIndex !== -1) {
           const from = startIndex + 1; // TipTap uses 1-based indexing
-          const to = from + issue.original.length;
+          const to = from + issue.originalText.length;
           
           // Use TipTap's built-in text replacement
           editor.chain()
@@ -199,19 +338,29 @@ export const Editor: React.FC = () => {
             .insertContent(replacement)
             .run();
             
-          // Mark suggestion as dismissed
-          setDismissedSuggestions(prev => new Set([...prev, issue.id]));
+          console.log(`Accepted suggestion: "${issue.originalText}" -> "${replacement}"`);
           
-          // Re-analyze content after replacement
+          // Clear analysis to remove highlighting immediately
+          setAiAnalysis(null);
+          
+          // Clear last analyzed text so re-analysis will run with new content
+          lastAnalyzedTextRef.current = '';
+          
+          // Pause analysis for 5 seconds to prevent immediate cycling
+          analysisPausedUntilRef.current = Date.now() + 5000;
+          console.log('Analysis paused for 5 seconds to prevent cycling');
+          
           setTimeout(() => {
-            analyzeContentWithAI(editor.getText());
-          }, 500);
+            const newText = editor.getText();
+            console.log('Re-analyzing after suggestion acceptance:', newText);
+            analyzeContentWithAI(newText);
+          }, 5000); // Increased delay to match pause period
         }
       }
-    } else if (issue.startPosition !== undefined && issue.endPosition !== undefined && replacement) {
-      // Fallback to position-based replacement for edge cases
-      const from = issue.startPosition + 1;
-      const to = issue.endPosition + 1;
+    } else if (issue.position && replacement) {
+      // Use position-based replacement
+      const from = issue.position.start + 1;
+      const to = issue.position.end + 1;
       
       if (from >= 1 && to >= 1 && to <= editor.state.doc.content.size) {
         editor.chain()
@@ -220,12 +369,23 @@ export const Editor: React.FC = () => {
           .insertContent(replacement)
           .run();
           
-        // Mark suggestion as dismissed
-        setDismissedSuggestions(prev => new Set([...prev, issue.id]));
+        console.log(`Accepted suggestion (position-based): "${issue.originalText}" -> "${replacement}"`);
+        
+        // Clear analysis to remove highlighting immediately
+        setAiAnalysis(null);
+        
+        // Clear last analyzed text so re-analysis will run
+        lastAnalyzedTextRef.current = '';
+        
+        // Pause analysis for 5 seconds to prevent immediate cycling
+        analysisPausedUntilRef.current = Date.now() + 5000;
+        console.log('Analysis paused for 5 seconds to prevent cycling');
           
         setTimeout(() => {
-          analyzeContentWithAI(editor.getText());
-        }, 500);
+          const newText = editor.getText();
+          console.log('Re-analyzing after suggestion acceptance:', newText);
+          analyzeContentWithAI(newText);
+        }, 5000); // Increased delay to match pause period
       }
     }
   };
@@ -234,15 +394,16 @@ export const Editor: React.FC = () => {
     setDismissedSuggestions(prev => new Set(prev).add(suggestionId));
   };
   
-  const getFilteredIssues = (issues: AISuggestion[] = []) => issues.filter(issue => !dismissedSuggestions.has(issue.id));
+  const getFilteredIssues = (issues: Suggestion[] = []) => issues.filter(issue => !dismissedSuggestions.has(issue.id));
 
-  const renderSuggestionBlock = (issue: AISuggestion) => {
-    const typeStyles = {
+  const renderSuggestionBlock = (issue: Suggestion) => {
+    const typeStyles: Record<string, { icon: React.ReactElement; borderColor: string; titleColor: string }> = {
         grammar: { icon: <AlertCircle className="h-4 w-4 text-red-500" />, borderColor: 'border-red-500/50', titleColor: 'text-red-800 dark:text-red-200' },
         spelling: { icon: <Type className="h-4 w-4 text-yellow-500" />, borderColor: 'border-yellow-500/50', titleColor: 'text-yellow-800 dark:text-yellow-200' },
         vocabulary: { icon: <Palette className="h-4 w-4 text-green-500" />, borderColor: 'border-green-500/50', titleColor: 'text-green-800 dark:text-green-200' },
         clarity: { icon: <Lightbulb className="h-4 w-4 text-blue-500" />, borderColor: 'border-blue-500/50', titleColor: 'text-blue-800 dark:text-blue-200' },
         style: { icon: <CheckCircle className="h-4 w-4 text-purple-500" />, borderColor: 'border-purple-500/50', titleColor: 'text-purple-800 dark:text-purple-200' },
+        punctuation: { icon: <AlertCircle className="h-4 w-4 text-orange-500" />, borderColor: 'border-orange-500/50', titleColor: 'text-orange-800 dark:text-orange-200' },
     };
     const styles = typeStyles[issue.type] || typeStyles.clarity;
 
@@ -250,11 +411,11 @@ export const Editor: React.FC = () => {
       <div key={issue.id} className={`p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-l-4 ${styles.borderColor} mb-2`}>
         <div className={`flex items-start font-semibold text-sm ${styles.titleColor} mb-2`}>
             <span className="mr-2">{styles.icon}</span>
-            <span>{issue.suggestion}</span>
+            <span>{issue.message}</span>
         </div>
-        {issue.original && (issue.replacement || issue.replacement === '') && (
+        {issue.originalText && issue.suggestions && issue.suggestions[0] && (
           <div className="text-xs text-gray-600 dark:text-gray-400 pl-6 mb-2">
-            Change <span className="font-mono bg-gray-200 dark:bg-gray-700 p-0.5 rounded">"{issue.original}"</span> to <span className="font-mono bg-gray-200 dark:bg-gray-700 p-0.5 rounded">"{issue.replacement}"</span>
+            Change <span className="font-mono bg-gray-200 dark:bg-gray-700 p-0.5 rounded">"{issue.originalText}"</span> to <span className="font-mono bg-gray-200 dark:bg-gray-700 p-0.5 rounded">"{issue.suggestions[0]}"</span>
           </div>
         )}
         <div className="flex items-center justify-end space-x-2 pl-6">
@@ -269,7 +430,7 @@ export const Editor: React.FC = () => {
     );
   };
   
-  const renderIssueSection = (title: string, issues: AISuggestion[] = [], icon: React.ReactNode) => {
+  const renderIssueSection = (title: string, issues: Suggestion[] = [], icon: React.ReactNode) => {
       const filtered = getFilteredIssues(issues);
       if (filtered.length === 0) return null;
       return (
@@ -291,6 +452,7 @@ export const Editor: React.FC = () => {
       ...getFilteredIssues(aiAnalysis.vocabularyIssues),
       ...getFilteredIssues(aiAnalysis.clarityIssues),
       ...getFilteredIssues(aiAnalysis.styleIssues),
+      ...getFilteredIssues(aiAnalysis.punctuationIssues),
   ] : []).length;
 
   // Load document if ID is provided in URL
@@ -554,6 +716,15 @@ ${content.replace(/\n/g, '\\par ')}
     }, 0)
   }
 
+  // Function to reset suggestion tracking
+  const resetSuggestionTracking = useCallback(() => {
+    acceptedChangesRef.current.clear();
+    setDismissedSuggestions(new Set());
+    lastAnalyzedTextRef.current = '';
+    setAiAnalysis(null);
+    console.log('Reset suggestion tracking');
+  }, []);
+
     return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
       <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -711,6 +882,7 @@ ${content.replace(/\n/g, '\\par ')}
                         <>
                             {renderIssueSection("Grammar Issues", aiAnalysis?.grammarIssues, <AlertCircle className="h-4 w-4 text-red-500 mr-2" />)}
                             {renderIssueSection("Spelling Issues", aiAnalysis?.spellingIssues, <Type className="h-4 w-4 text-yellow-500 mr-2" />)}
+                            {renderIssueSection("Punctuation Issues", aiAnalysis?.punctuationIssues, <AlertCircle className="h-4 w-4 text-orange-500 mr-2" />)}
                             {renderIssueSection("Vocabulary", aiAnalysis?.vocabularyIssues, <Palette className="h-4 w-4 text-green-500 mr-2" />)}
                             {renderIssueSection("Clarity", aiAnalysis?.clarityIssues, <Lightbulb className="h-4 w-4 text-blue-500 mr-2" />)}
                             {renderIssueSection("Style", aiAnalysis?.styleIssues, <CheckCircle className="h-4 w-4 text-purple-500 mr-2" />)}

@@ -79,6 +79,7 @@ export type SuggestionType =
   | 'tone'
   | 'conciseness'
   | 'formality'
+  | 'punctuation'
 
 export interface TextPosition {
   start: number
