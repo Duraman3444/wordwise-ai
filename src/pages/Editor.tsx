@@ -96,7 +96,7 @@ export const Editor: React.FC = () => {
       Typography,
       SuggestionMark.configure({ multicolor: true }),
     ],
-    content: '<p>Hello my name is Abdurrahman Mirza and this is my gramar checker.</p>',
+    content: '',
     editorProps: {
       attributes: {
         class: 'prose dark:prose-invert prose-sm sm:prose-base lg:prose-lg xl:prose-2xl m-5 focus:outline-none min-h-[500px]',
@@ -104,6 +104,12 @@ export const Editor: React.FC = () => {
     },
     onUpdate: ({ editor }) => {
       const text = editor.getText();
+      const html = editor.getHTML();
+      
+      // Sync content state with editor
+      if (html !== content) {
+        setContent(html);
+      }
       
       // Check if analysis is paused
       const now = Date.now();
@@ -303,6 +309,13 @@ export const Editor: React.FC = () => {
   useEffect(() => {
     if (editor) {
         editorRef.current = editor;
+        
+        // Only set default content if no content exists and no document is being loaded
+        const docId = searchParams.get('id')
+        if (!docId && !content) {
+          editor.commands.setContent('<p>Start writing your document here...</p>')
+        }
+        
         analyzeContentWithAI(editor.getText());
     }
   }, [editor]);
@@ -495,7 +508,7 @@ export const Editor: React.FC = () => {
   // Load document if ID is provided in URL
   useEffect(() => {
     const docId = searchParams.get('id')
-    if (docId) {
+    if (docId && editor) {
       try {
         const existingDocs = JSON.parse(localStorage.getItem('documents') || '[]')
         const document = existingDocs.find((doc: any) => doc.id === docId)
@@ -504,6 +517,7 @@ export const Editor: React.FC = () => {
           console.log('Loading document:', document.title)
           setTitle(document.title)
           setContent(document.content)
+          editor.commands.setContent(document.content) // Set editor content
           setAutoSaveStatus('saved')
           
           // Trigger AI analysis for loaded document
@@ -517,11 +531,11 @@ export const Editor: React.FC = () => {
         console.error('Error loading document:', error)
       }
     }
-  }, [searchParams, analyzeContentWithAI])
+  }, [searchParams, editor, analyzeContentWithAI])
 
   // Auto-save functionality
   useEffect(() => {
-    if (!content || content.trim() === '') {
+    if (!editor || !content || content.trim() === '' || content === '<p></p>') {
       console.log('No content to save')
       return
     }
@@ -530,6 +544,7 @@ export const Editor: React.FC = () => {
       const existingDocId = searchParams.get('id')
       const docId = existingDocId || `doc_${Date.now()}`
       const documentTitle = title.trim() || 'Untitled Document'
+      const textContent = editor.getText()
       
       const documentData = {
         id: docId,
@@ -537,7 +552,7 @@ export const Editor: React.FC = () => {
         content: content,
         createdAt: existingDocId ? undefined : new Date().toISOString(), // Only set createdAt for new docs
         updatedAt: new Date().toISOString(),
-        wordCount: content.split(/\s+/).filter(Boolean).length,
+        wordCount: textContent.split(/\s+/).filter(Boolean).length,
         status: 'draft' as const,
         tags: [] as string[]
       }
@@ -583,16 +598,17 @@ export const Editor: React.FC = () => {
 
     setAutoSaveStatus('saving')
     return () => clearTimeout(timer)
-  }, [content, searchParams])
+  }, [content, title, editor, searchParams])
 
   const handleSave = async () => {
-    if (!content.trim() && !title.trim()) return
+    if (!editor || (!content.trim() && !title.trim()) || content === '<p></p>') return
     
     setIsAutoSaving(true)
     try {
       const existingDocId = searchParams.get('id')
       const docId = existingDocId || `doc_${Date.now()}`
       const documentTitle = title.trim() || 'Untitled Document'
+      const textContent = editor.getText()
       
       const documentData = {
         id: docId,
@@ -600,7 +616,7 @@ export const Editor: React.FC = () => {
         content: content,
         createdAt: existingDocId ? undefined : new Date().toISOString(), // Only set createdAt for new docs
         updatedAt: new Date().toISOString(),
-        wordCount: content.split(/\s+/).filter(Boolean).length,
+        wordCount: textContent.split(/\s+/).filter(Boolean).length,
         status: 'draft' as const,
         tags: [] as string[]
       }
@@ -647,6 +663,11 @@ export const Editor: React.FC = () => {
   }
 
   const handleExportPDF = () => {
+    if (!editor) return
+    
+    const textContent = editor.getText()
+    const htmlContent = editor.getHTML()
+    
     // Create a proper PDF-like content
     const pdfContent = `
 <!DOCTYPE html>
@@ -671,7 +692,6 @@ export const Editor: React.FC = () => {
             margin-bottom: 30px;
         }
         .content { 
-            white-space: pre-wrap; 
             margin-bottom: 40px; 
         }
         .footer { 
@@ -688,10 +708,10 @@ export const Editor: React.FC = () => {
 </head>
 <body>
     <h1>${title}</h1>
-    <div class="content">${content.replace(/\n/g, '<br>')}</div>
+    <div class="content">${htmlContent}</div>
     <div class="footer">
         <p>Exported from WordWise AI on ${new Date().toLocaleDateString()}</p>
-        <p>Words: ${content.split(/\s+/).filter(word => word.length > 0).length} | Characters: ${content.length}</p>
+        <p>Words: ${textContent.split(/\s+/).filter(word => word.length > 0).length} | Characters: ${textContent.length}</p>
     </div>
 </body>
 </html>`
@@ -712,17 +732,21 @@ export const Editor: React.FC = () => {
   }
 
   const handleExportWord = () => {
+    if (!editor) return
+    
+    const textContent = editor.getText()
+    
     // Create proper Word document content with RTF format
     const rtfContent = `{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}
 {\\colortbl;\\red0\\green0\\blue0;\\red0\\green0\\blue255;}
 \\f0\\fs24 {\\b\\fs32\\cf2 ${title}\\par}
 \\par
-${content.replace(/\n/g, '\\par ')}
+${textContent.replace(/\n/g, '\\par ')}
 \\par
 \\par
 {\\i Exported from WordWise AI on ${new Date().toLocaleDateString()}}
 \\par
-{\\fs18 Words: ${content.split(/\s+/).filter(word => word.length > 0).length} | Characters: ${content.length}}
+{\\fs18 Words: ${textContent.split(/\s+/).filter(word => word.length > 0).length} | Characters: ${textContent.length}}
 }`
     
     const element = document.createElement('a')
