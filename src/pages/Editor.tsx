@@ -87,6 +87,7 @@ export const Editor: React.FC = () => {
   const lastAnalyzedTextRef = useRef<string>('')
   const acceptedChangesRef = useRef<Set<string>>(new Set())
   const analysisPausedUntilRef = useRef<number>(0) // Timestamp to pause analysis until
+  const dismissedSuggestionKeysRef = useRef<Set<string>>(new Set()) // Content-based dismissed suggestions
 
   const editor = useEditor({
     extensions: [
@@ -119,6 +120,12 @@ export const Editor: React.FC = () => {
         console.log('Text changed significantly, clearing accepted changes');
         acceptedChangesRef.current.clear();
         setDismissedSuggestions(new Set());
+        // Keep permanently dismissed suggestions unless the change is very drastic (>50% change)
+        const changePercentage = Math.abs(currentWordCount - lastWordCount) / Math.max(lastWordCount, 1);
+        if (changePercentage > 0.5) {
+          console.log('Text changed drastically (>50%), clearing dismissed suggestions too');
+          dismissedSuggestionKeysRef.current.clear();
+        }
       }
       
       if (analysisTimeoutRef.current) clearTimeout(analysisTimeoutRef.current);
@@ -158,6 +165,15 @@ export const Editor: React.FC = () => {
       
       // More sophisticated filtering for already accepted suggestions
       const filteredSuggestions = suggestions.filter(suggestion => {
+        // Check if this suggestion has been permanently dismissed
+        const contentKey = `${suggestion.type}:${suggestion.originalText}:${suggestion.message}`;
+        const isPermanentlyDismissed = dismissedSuggestionKeysRef.current.has(contentKey);
+        
+        if (isPermanentlyDismissed) {
+          console.log(`Filtering out permanently dismissed suggestion: "${contentKey}"`);
+          return false;
+        }
+        
         // Check if this specific suggestion has been accepted
         const suggestionKey = `${suggestion.originalText}->${suggestion.suggestions[0] || ''}`;
         const isExactlyAccepted = acceptedChangesRef.current.has(suggestionKey);
@@ -391,6 +407,27 @@ export const Editor: React.FC = () => {
   };
 
   const handleRejectSuggestion = (suggestionId: string) => {
+    // Find the suggestion being dismissed to get its content
+    const allIssues = [
+      ...(aiAnalysis?.grammarIssues || []),
+      ...(aiAnalysis?.spellingIssues || []),
+      ...(aiAnalysis?.vocabularyIssues || []),
+      ...(aiAnalysis?.clarityIssues || []),
+      ...(aiAnalysis?.styleIssues || []),
+      ...(aiAnalysis?.punctuationIssues || []),
+    ];
+    
+    const suggestionToDismiss = allIssues.find(issue => issue.id === suggestionId);
+    
+    if (suggestionToDismiss) {
+      // Create a content-based key for permanent dismissal
+      const contentKey = `${suggestionToDismiss.type}:${suggestionToDismiss.originalText}:${suggestionToDismiss.message}`;
+      dismissedSuggestionKeysRef.current.add(contentKey);
+      console.log(`Permanently dismissed suggestion: "${contentKey}"`);
+      console.log('All dismissed keys:', Array.from(dismissedSuggestionKeysRef.current));
+    }
+    
+    // Also add to the ID-based set for immediate UI updates
     setDismissedSuggestions(prev => new Set(prev).add(suggestionId));
   };
   
@@ -719,10 +756,11 @@ ${content.replace(/\n/g, '\\par ')}
   // Function to reset suggestion tracking
   const resetSuggestionTracking = useCallback(() => {
     acceptedChangesRef.current.clear();
+    dismissedSuggestionKeysRef.current.clear();
     setDismissedSuggestions(new Set());
     lastAnalyzedTextRef.current = '';
     setAiAnalysis(null);
-    console.log('Reset suggestion tracking');
+    console.log('Reset all suggestion tracking (accepted, dismissed, and analysis)');
   }, []);
 
     return (
