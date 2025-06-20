@@ -356,10 +356,6 @@ Return analysis in JSON format:
       
       if (academicSuggestion) {
         const sentenceStart = text.indexOf(trimmedSentence);
-        
-        // Create a semantic content key to prevent re-suggesting the same improvement
-        const semanticKey = this.getSemanticContentKey(trimmedSentence, academicSuggestion.improved);
-        
         suggestions.push({
           id: `academic_sentence_${sentenceIndex}`,
           type: 'academic_tone',
@@ -374,52 +370,12 @@ Return analysis in JSON format:
           },
           confidence: 0.85,
           timestamp: new Date(),
-          isAcademicTone: true,
-          semanticKey // Add semantic key for better dismissal tracking
+          isAcademicTone: true
         });
       }
     });
 
     return suggestions;
-  }
-
-  /**
-   * Create a semantic content key that identifies the core meaning of a suggestion
-   * This helps prevent re-suggesting the same semantic improvement after text changes
-   */
-  private static getSemanticContentKey(originalText: string, improvedText: string): string {
-    const original = originalText.toLowerCase().trim();
-    const improved = improvedText.toLowerCase().trim();
-    
-    // Extract semantic patterns
-    const patterns = [
-      'masturbation_topic',
-      'opinion_question', 
-      'perspective_question',
-      'informal_to_formal',
-      'slang_to_academic'
-    ];
-    
-    // Check for masturbation/sexual topic
-    if ((original.includes('beatin') && original.includes('dih')) || 
-        (improved.includes('masturbation') || improved.includes('opinion on masturbation'))) {
-      return 'semantic:masturbation_topic_formalization';
-    }
-    
-    // Check for opinion/perspective questions
-    if ((original.includes('what is') && original.includes('opinion')) ||
-        (improved.includes('what is your perspective') || improved.includes('what is your opinion'))) {
-      return 'semantic:opinion_perspective_question';
-    }
-    
-    // Check for informal to formal patterns
-    if (original.includes('yo') || original.includes('ur') || 
-        improved.includes('your') && !original.includes('your')) {
-      return 'semantic:informal_pronoun_formalization';
-    }
-    
-    // Fallback to content-based key
-    return `semantic:${original.substring(0, 20)}_to_${improved.substring(0, 20)}`;
   }
 
   /**

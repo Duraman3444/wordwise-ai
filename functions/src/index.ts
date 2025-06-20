@@ -45,128 +45,17 @@ export const analyzeText = onRequest(
         timeout: 10000 // 10 second timeout for OpenAI requests
       });
 
-      const { 
-        text, 
-        userType = 'student', 
-        documentType = 'essay',
-        includeAcademicTone = false,
-        analysisType = 'general',
-        targetDocumentType = 'essay'
-      } = request.body || {};
+      const { text, userType = 'student', documentType = 'essay' } = request.body || {};
 
       if (!text || typeof text !== 'string') {
         response.status(400).json({ error: 'Text is required and must be a string' });
         return;
       }
 
-      console.log('Processing text analysis for:', userType, 'Length:', text.length, 'Type:', analysisType);
+      console.log('Processing text analysis for:', userType, 'Length:', text.length);
 
-      // Handle academic tone analysis specifically
-      if (analysisType === 'academic_tone' || documentType === 'academic_tone_analysis') {
-        console.log('Processing academic tone analysis...');
-        
-        const academicPrompt = `Analyze the following text for academic tone and formality. Provide specific suggestions to improve the academic writing style:
-
-Text to analyze:
-"${text}"
-
-Focus on:
-1. Informal language and contractions (yo, ur, beatin, etc.)
-2. Slang expressions that need formal alternatives
-3. Personal pronouns and subjective statements
-4. Colloquialisms and casual expressions
-5. Sentence structure and complexity
-6. Vocabulary appropriateness for academic context
-
-Return suggestions in JSON format:
-[{
-  "id": "tone_1",
-  "type": "academic_tone",
-  "severity": "warning",
-  "message": "Academic tone improvement",
-  "explanation": "Academic writing requires formal terminology and complete sentence structure.",
-  "originalText": "what is yo opinion on beatin yo dih",
-  "suggestions": ["What is your opinion on masturbation?"],
-  "confidence": 0.85
-}]
-
-Be thorough and identify ALL informal patterns. Return ONLY the JSON array.`;
-
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system",
-              content: "You are an academic writing expert. Help improve text to meet academic standards by identifying informal language, slang, and casual expressions."
-            },
-            {
-              role: "user",
-              content: academicPrompt
-            }
-          ],
-          temperature: 0.2,
-          max_tokens: 1000
-        });
-
-        const aiResponse = completion.choices[0]?.message?.content;
-        
-        if (aiResponse) {
-          try {
-            let cleanResponse = aiResponse.trim();
-            if (cleanResponse.startsWith('```json')) {
-              cleanResponse = cleanResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-            } else if (cleanResponse.startsWith('```')) {
-              cleanResponse = cleanResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
-            }
-            
-            const suggestions = JSON.parse(cleanResponse);
-            console.log('Academic tone suggestions parsed:', suggestions.length);
-            
-            response.json({ 
-              analysisResult: suggestions,
-              processingTime: Date.now() - startTime
-            });
-            return;
-          } catch (parseError) {
-            console.error('Academic tone JSON parse error:', parseError);
-          }
-        }
-      }
-
-      // Standard grammar and style analysis
-      let prompt = '';
-      
-      if (includeAcademicTone) {
-        // Combined analysis including academic tone
-        prompt = `You are a comprehensive writing assistant. Analyze this text for ALL types of improvements:
-
-"${text}"
-
-Find and categorize ALL issues:
-1. GRAMMAR: Subject-verb agreement, tense errors, sentence fragments
-2. SPELLING: Misspelled words
-3. PUNCTUATION: Missing or incorrect punctuation
-4. VOCABULARY: Word choice improvements
-5. CLARITY: Unclear or confusing expressions
-6. STYLE: Awkward phrasing, repetition
-7. ACADEMIC_TONE: Informal language that needs formalization
-
-Return ALL findings in this JSON format:
-[{
-  "id": "error_1",
-  "type": "grammar|spelling|punctuation|vocabulary|clarity|style|academic_tone",
-  "severity": "error|warning|info",
-  "originalText": "exact text with issue",
-  "suggestions": ["suggestion 1", "suggestion 2"],
-  "message": "Brief description",
-  "explanation": "Detailed explanation of the issue",
-  "confidence": 0.85
-}]
-
-Be thorough - find ALL issues. Return ONLY JSON array.`;
-      } else {
-        // Standard analysis
-        prompt = `You are a strict grammar checker. Find ALL errors in this text:
+      // AGGRESSIVE PROMPT - Catch ALL errors
+      const prompt = `You are a strict grammar checker. Find ALL errors in this text:
 
 "${text}"
 
@@ -193,26 +82,23 @@ Return JSON array with ALL errors found:
 }]
 
 Be thorough - if you see 5+ errors, report ALL of them. Return ONLY JSON array.`;
-      }
 
       console.log('Calling OpenAI API with gpt-4o-mini...');
       
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4o-mini",           // Faster and cheaper than gpt-3.5-turbo
         messages: [
           {
             role: "system",
-            content: includeAcademicTone 
-              ? "You are a comprehensive writing assistant that checks grammar, style, and academic tone. Always find ALL issues and return complete JSON arrays."
-              : "You are a strict grammar checker. Always find ALL errors and return complete JSON arrays."
+            content: "You are a strict grammar checker. Always find ALL errors and return complete JSON arrays."
           },
           {
             role: "user",
             content: prompt
           }
         ],
-        temperature: 0,
-        max_tokens: 1200, // Increased for academic tone analysis
+        temperature: 0,                 // Zero temperature for maximum accuracy
+        max_tokens: 800,                // Increased to capture all suggestions
         presence_penalty: 0,            
         frequency_penalty: 0
       });

@@ -139,7 +139,7 @@ export const Editor: React.FC = () => {
       const suggestions = await AIService.analyzeText(text, 'professional', 'document');
       console.log('Received suggestions:', suggestions);
       
-      // SIMPLIFIED filtering - only filter out permanently dismissed suggestions
+      // IMPROVED filtering - filter out permanently dismissed suggestions and check for resolved text
       const filteredSuggestions = suggestions.filter(suggestion => {
         // Check if this suggestion has been permanently dismissed
         const contentKey = `${suggestion.type}:${suggestion.originalText}:${suggestion.message}`;
@@ -150,13 +150,36 @@ export const Editor: React.FC = () => {
           return false;
         }
         
-        // Robust check: only filter if the original text no longer exists
-        const originalText = suggestion.originalText || '';
-        const originalTextExists = originalText.length === 0 || text.includes(originalText);
-        
-        if (!originalTextExists) {
-          console.log(`Filtering out suggestion - text no longer exists: "${originalText}"`);
-          return false;
+        // For academic tone suggestions, check if the problematic pattern still exists
+        if (suggestion.type === 'academic_tone') {
+          const originalText = suggestion.originalText || '';
+          
+          // Check if the original problematic text still exists in the current text
+          if (!text.includes(originalText)) {
+            console.log(`Filtering out academic tone suggestion - original text no longer exists: "${originalText}"`);
+            return false;
+          }
+          
+          // Additional check: if this looks like it was already fixed, filter it out
+          if (suggestion.suggestions && suggestion.suggestions[0]) {
+            const improvedText = suggestion.suggestions[0];
+            // If the improved text already exists in the current text, the suggestion was likely applied
+            if (text.includes(improvedText)) {
+              console.log(`Filtering out academic tone suggestion - improved text already exists: "${improvedText}"`);
+              // Add to dismissed keys to prevent future occurrences
+              dismissedSuggestionKeysRef.current.add(contentKey);
+              return false;
+            }
+          }
+        } else {
+          // For other suggestion types, robust check: only filter if the original text no longer exists
+          const originalText = suggestion.originalText || '';
+          const originalTextExists = originalText.length === 0 || text.includes(originalText);
+          
+          if (!originalTextExists) {
+            console.log(`Filtering out suggestion - text no longer exists: "${originalText}"`);
+            return false;
+          }
         }
         
         return true;
@@ -167,26 +190,6 @@ export const Editor: React.FC = () => {
       // Separate academic tone suggestions from regular suggestions
       const regularSuggestions = filteredSuggestions.filter(s => s.type !== 'academic_tone');
       const academicToneSuggestions = filteredSuggestions.filter(s => s.type === 'academic_tone');
-      
-      // Filter out academic tone suggestions that have been semantically dismissed
-      const filteredAcademicSuggestions = academicToneSuggestions.filter(suggestion => {
-        // Check semantic key dismissal
-        if (suggestion.semanticKey && dismissedSuggestionKeysRef.current.has(suggestion.semanticKey)) {
-          console.log(`Filtering out semantically dismissed suggestion: ${suggestion.semanticKey}`);
-          return false;
-        }
-        
-        // Check content-based dismissal
-        const contentKey = `${suggestion.type}:${suggestion.originalText}:${suggestion.message}`;
-        if (dismissedSuggestionKeysRef.current.has(contentKey)) {
-          console.log(`Filtering out content-dismissed suggestion: ${contentKey}`);
-          return false;
-        }
-        
-        return true;
-      });
-      
-      console.log('Academic tone suggestions after filtering:', filteredAcademicSuggestions.length);
       
       // Convert to expected format
       const analysis = {
@@ -200,17 +203,14 @@ export const Editor: React.FC = () => {
       };
       
       console.log('Processed analysis:', analysis);
-      console.log('Academic tone suggestions:', filteredAcademicSuggestions);
+      console.log('Academic tone suggestions:', academicToneSuggestions);
       
       setAiAnalysis(analysis);
-      setAcademicToneSuggestions(filteredAcademicSuggestions);
+      setAcademicToneSuggestions(academicToneSuggestions);
       
       // Show academic tone panel if there are suggestions
-      if (filteredAcademicSuggestions.length > 0) {
+      if (academicToneSuggestions.length > 0) {
         setShowAcademicTone(true);
-      } else if (academicToneSuggestions.length > 0 && filteredAcademicSuggestions.length === 0) {
-        // If we had suggestions but they were all filtered out, hide the panel
-        setShowAcademicTone(false);
       }
     } catch (error) {
       console.error('Error analyzing content:', error);
@@ -300,16 +300,9 @@ export const Editor: React.FC = () => {
     if (issue.type === 'academic_tone' || issue.isAcademicTone) {
       setAcademicToneSuggestions(prev => prev.filter(s => s.id !== issue.id));
       
-      // Use semantic key for dismissal if available
-      if (issue.semanticKey) {
-        dismissedSuggestionKeysRef.current.add(issue.semanticKey);
-        console.log(`🔑 Added semantic dismissal key: ${issue.semanticKey}`);
-      }
-      
-      // Also create content-based dismissal key for backward compatibility
+      // Create content-based dismissal key to prevent re-appearance
       const contentKey = `${issue.type}:${issue.originalText}:${issue.message}`;
       dismissedSuggestionKeysRef.current.add(contentKey);
-      console.log(`📝 Added content dismissal key: ${contentKey}`);
       
       // Smart punctuation handling for academic tone
       const currentText = editor.getText();
@@ -387,16 +380,10 @@ export const Editor: React.FC = () => {
     const suggestionToDismiss = allIssues.find(issue => issue.id === suggestionId);
     
     if (suggestionToDismiss) {
-      // Use semantic key for dismissal if available
-      if (suggestionToDismiss.semanticKey) {
-        dismissedSuggestionKeysRef.current.add(suggestionToDismiss.semanticKey);
-        console.log(`🔑 Permanently dismissed suggestion with semantic key: "${suggestionToDismiss.semanticKey}"`);
-      }
-      
-      // Also create a content-based key for backward compatibility
+      // Create a content-based key for permanent dismissal
       const contentKey = `${suggestionToDismiss.type}:${suggestionToDismiss.originalText}:${suggestionToDismiss.message}`;
       dismissedSuggestionKeysRef.current.add(contentKey);
-      console.log(`📝 Permanently dismissed suggestion: "${contentKey}"`);
+      console.log(`Permanently dismissed suggestion: "${contentKey}"`);
       console.log('All dismissed keys:', Array.from(dismissedSuggestionKeysRef.current));
       
       // For academic tone suggestions, also remove them from the academic tone list
@@ -1055,7 +1042,7 @@ ${textContent.replace(/\n/g, '\\par ')}
                         >
                           <X className="h-3 w-3" />
                         </Button>
-              </div>
+                      </div>
 
                       <div className="space-y-3 max-h-[40vh] overflow-y-auto">
                         {academicToneSuggestions.length === 0 && !isAnalyzingTone ? (
@@ -1064,7 +1051,7 @@ ${textContent.replace(/\n/g, '\\par ')}
                             <p className="font-medium text-green-600 dark:text-green-400">
                               Great academic tone! Your writing maintains appropriate formality.
                             </p>
-                    </div>
+                          </div>
                         ) : (
                           academicToneSuggestions.map((suggestion) => (
                             <div

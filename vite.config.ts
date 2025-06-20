@@ -10,17 +10,25 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  define: {
-    'process.env': {}
+  // PDF.js configuration for browser compatibility
+  optimizeDeps: {
+    include: ['pdfjs-dist']
   },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: undefined,
-      }
+  define: {
+    // Required for PDF.js worker
+    global: 'globalThis',
+  },
+  server: {
+    // Configure headers for PDF files
+    headers: {
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+      'Cross-Origin-Opener-Policy': 'same-origin'
     },
-    commonjsOptions: {
-      transformMixedEsModules: true
+    fs: {
+      // Allow serving PDF files from src/data
+      allow: ['..', './src/data']
     }
-  }
+  },
+  // Handle PDF file imports
+  assetsInclude: ['**/*.pdf']
 }) 
