@@ -1,0 +1,74 @@
+import { WordExportService } from '../services/wordExport';
+
+/**
+ * Test function to verify Word export functionality
+ */
+export const testWordExport = async () => {
+  try {
+    console.log('Testing Word export functionality...');
+    
+    // Test basic export
+    await WordExportService.exportToWord({
+      title: 'Test Document',
+      content: '<p>This is a test document with <strong>bold text</strong> and <em>italic text</em>.</p><p>This is another paragraph for testing.</p>',
+      author: 'Test Author',
+      includeMetadata: true,
+      includeWordCount: true,
+      fontSize: 12
+    });
+    
+    console.log('✅ Basic Word export test passed');
+    
+    // Test export with formatting
+    await WordExportService.exportToWordWithFormatting({
+      title: 'Test Formatted Document',
+      content: '<h1>Main Heading</h1><p>This is a paragraph under the main heading.</p><h2>Subheading</h2><p>This is content under the subheading with <strong>bold</strong> and <em>italic</em> text.</p>',
+      author: 'Test Author',
+      includeMetadata: true,
+      includeWordCount: true,
+      fontSize: 12
+    });
+    
+    console.log('✅ Formatted Word export test passed');
+    
+    // Test analytics export
+    await WordExportService.exportWithAnalytics({
+      title: 'Test Analytics Document',
+      content: '<p>This is a test document for analytics export.</p>',
+      author: 'Test Author',
+      writingScore: 85,
+      suggestions: [
+        {
+          type: 'grammar',
+          message: 'Consider using active voice',
+          originalText: 'was written'
+        },
+        {
+          type: 'style',
+          message: 'This sentence could be clearer',
+          originalText: 'unclear sentence'
+        }
+      ],
+      analytics: {
+        readingTime: '2 minutes',
+        sentenceCount: 5,
+        avgWordsPerSentence: 12
+      },
+      includeMetadata: true,
+      includeWordCount: true,
+      fontSize: 12
+    });
+    
+    console.log('✅ Analytics Word export test passed');
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Word export test failed:', error);
+    return false;
+  }
+};
+
+// Export for use in browser console
+if (typeof window !== 'undefined') {
+  (window as any).testWordExport = testWordExport;
+} 

@@ -68,6 +68,8 @@ export interface Suggestion {
   confidence: number
   accepted?: boolean
   timestamp: Date
+  isAcademicTone?: boolean
+  semanticKey?: string
 }
 
 export type SuggestionType = 
@@ -80,6 +82,7 @@ export type SuggestionType =
   | 'conciseness'
   | 'formality'
   | 'punctuation'
+  | 'academic_tone'
 
 export interface TextPosition {
   start: number

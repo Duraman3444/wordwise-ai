@@ -82,7 +82,7 @@ export const EditorEnhanced: React.FC = () => {
 
   const loadLocalDocuments = (): LocalDocument[] => {
     try {
-      const saved = localStorage.getItem('wordwise-documents')
+      const saved = localStorage.getItem('documents')
       if (saved) {
         const parsed = JSON.parse(saved)
         return parsed.map((doc: any) => ({
@@ -99,7 +99,7 @@ export const EditorEnhanced: React.FC = () => {
 
   const saveLocalDocuments = (docs: LocalDocument[]) => {
     try {
-      localStorage.setItem('wordwise-documents', JSON.stringify(docs))
+      localStorage.setItem('documents', JSON.stringify(docs))
     } catch (error) {
       console.error('Error saving local documents:', error)
     }

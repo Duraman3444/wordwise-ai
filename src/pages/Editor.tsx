@@ -3,6 +3,7 @@ import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
 import { AIService } from '@/services/ai'
 import { Suggestion } from '@/types'
+import PDFExportService from '@/services/pdfExport'
 import { 
   Save, 
   Download, 
@@ -78,6 +79,9 @@ export const Editor: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [userLevel, setUserLevel] = useState<'beginner' | 'intermediate' | 'advanced'>('intermediate')
   const [isProcessingSuggestions, setIsProcessingSuggestions] = useState(false)
+  const [isAnalyzingTone, setIsAnalyzingTone] = useState(false)
+  const [academicToneSuggestions, setAcademicToneSuggestions] = useState<Suggestion[]>([])
+  const [showAcademicTone, setShowAcademicTone] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout>()
   const analysisTimeoutRef = useRef<NodeJS.Timeout>()
@@ -85,8 +89,6 @@ export const Editor: React.FC = () => {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saving' | 'saved' | 'error'>('saving')
   const editorRef = useRef<TiptapEditor | null>(null)
   const lastAnalyzedTextRef = useRef<string>('')
-  const acceptedChangesRef = useRef<Set<string>>(new Set())
-  const analysisPausedUntilRef = useRef<number>(0) // Timestamp to pause analysis until
   const dismissedSuggestionKeysRef = useRef<Set<string>>(new Set()) // Content-based dismissed suggestions
 
   const editor = useEditor({
@@ -111,35 +113,10 @@ export const Editor: React.FC = () => {
         setContent(html);
       }
       
-      // Check if analysis is paused
-      const now = Date.now();
-      if (now < analysisPausedUntilRef.current) {
-        console.log('Analysis paused, skipping update');
-        return;
-      }
-      
-      // If the text has changed significantly, clear accepted changes
-      const currentWordCount = text.split(/\s+/).filter(Boolean).length;
-      const lastWordCount = lastAnalyzedTextRef.current.split(/\s+/).filter(Boolean).length;
-      
-      if (Math.abs(currentWordCount - lastWordCount) > 10) {
-        console.log('Text changed significantly, clearing accepted changes');
-        acceptedChangesRef.current.clear();
-        setDismissedSuggestions(new Set());
-        // Keep permanently dismissed suggestions unless the change is very drastic (>50% change)
-        const changePercentage = Math.abs(currentWordCount - lastWordCount) / Math.max(lastWordCount, 1);
-        if (changePercentage > 0.5) {
-          console.log('Text changed drastically (>50%), clearing dismissed suggestions too');
-          dismissedSuggestionKeysRef.current.clear();
-        }
-      }
-      
+      // Simple debounced analysis
       if (analysisTimeoutRef.current) clearTimeout(analysisTimeoutRef.current);
       analysisTimeoutRef.current = setTimeout(() => {
-        // Double-check pause status before analyzing
-        if (Date.now() >= analysisPausedUntilRef.current) {
-          analyzeContentWithAI(text);
-        }
+        analyzeContentWithAI(text);
       }, 3000);
     },
   });
@@ -147,13 +124,6 @@ export const Editor: React.FC = () => {
   const analyzeContentWithAI = useCallback(async (text: string) => {
     if (!text.trim() || !editor) {
       setAiAnalysis(null);
-      return;
-    }
-    
-    // Check if analysis is currently paused
-    const now = Date.now();
-    if (now < analysisPausedUntilRef.current) {
-      console.log('Analysis is paused, skipping');
       return;
     }
     
@@ -169,7 +139,7 @@ export const Editor: React.FC = () => {
       const suggestions = await AIService.analyzeText(text, 'professional', 'document');
       console.log('Received suggestions:', suggestions);
       
-      // More sophisticated filtering for already accepted suggestions
+      // SIMPLIFIED filtering - only filter out permanently dismissed suggestions
       const filteredSuggestions = suggestions.filter(suggestion => {
         // Check if this suggestion has been permanently dismissed
         const contentKey = `${suggestion.type}:${suggestion.originalText}:${suggestion.message}`;
@@ -180,72 +150,68 @@ export const Editor: React.FC = () => {
           return false;
         }
         
-        // Check if this specific suggestion has been accepted
-        const suggestionKey = `${suggestion.originalText}->${suggestion.suggestions[0] || ''}`;
-        const isExactlyAccepted = acceptedChangesRef.current.has(suggestionKey);
+        // Robust check: only filter if the original text no longer exists
+        const originalText = suggestion.originalText || '';
+        const originalTextExists = originalText.length === 0 || text.includes(originalText);
         
-        // Check if the original text still exists in the current document
-        const originalTextExists = text.includes(suggestion.originalText || '');
-        
-        // Check for similar accepted changes (to catch variations)
-        const isSimilarAccepted = Array.from(acceptedChangesRef.current).some(acceptedChange => {
-          const [acceptedOriginal] = acceptedChange.split('->');
-          // Check if this is a similar suggestion for the same text segment
-          return acceptedOriginal === suggestion.originalText || 
-                 (acceptedOriginal.length > 5 && suggestion.originalText && 
-                  acceptedOriginal.includes(suggestion.originalText.substring(0, Math.min(10, suggestion.originalText.length))));
-        });
-        
-        // For clarity suggestions, be more aggressive about filtering repeats
-        if (suggestion.type === 'clarity') {
-          // Check if we've already seen a clarity suggestion for this text segment
-          const hasRecentClaritySuggestion = Array.from(acceptedChangesRef.current).some(acceptedChange => {
-            // Check for clarity-specific tracking
-            if (acceptedChange.startsWith('clarity:')) {
-              const trackedText = acceptedChange.substring(8); // Remove 'clarity:' prefix
-              return suggestion.originalText?.includes(trackedText) || trackedText.includes(suggestion.originalText || '');
-            }
-            
-            const [acceptedOriginal] = acceptedChange.split('->');
-            // If the original text overlaps significantly, consider it redundant
-            if (!suggestion.originalText || !acceptedOriginal) return false;
-            const overlap = Math.max(
-              suggestion.originalText.indexOf(acceptedOriginal.substring(0, 15)),
-              acceptedOriginal.indexOf(suggestion.originalText.substring(0, 15))
-            );
-            return overlap >= 0;
-          });
-          
-          if (hasRecentClaritySuggestion) {
-            console.log(`Filtering out potentially redundant clarity suggestion: "${suggestion.originalText}"`);
-            return false;
-          }
+        if (!originalTextExists) {
+          console.log(`Filtering out suggestion - text no longer exists: "${originalText}"`);
+          return false;
         }
         
-        const shouldInclude = !isExactlyAccepted && !isSimilarAccepted && originalTextExists;
-        
-        if (!shouldInclude) {
-          console.log(`Filtering out suggestion: "${suggestion.originalText}" (exactlyAccepted: ${isExactlyAccepted}, similarAccepted: ${isSimilarAccepted}, textExists: ${originalTextExists})`);
-        }
-        
-        return shouldInclude;
+        return true;
       });
       
-      console.log('Filtered suggestions (removed accepted):', filteredSuggestions);
+      console.log('Filtered suggestions (simplified):', filteredSuggestions);
+      
+      // Separate academic tone suggestions from regular suggestions
+      const regularSuggestions = filteredSuggestions.filter(s => s.type !== 'academic_tone');
+      const academicToneSuggestions = filteredSuggestions.filter(s => s.type === 'academic_tone');
+      
+      // Filter out academic tone suggestions that have been semantically dismissed
+      const filteredAcademicSuggestions = academicToneSuggestions.filter(suggestion => {
+        // Check semantic key dismissal
+        if (suggestion.semanticKey && dismissedSuggestionKeysRef.current.has(suggestion.semanticKey)) {
+          console.log(`Filtering out semantically dismissed suggestion: ${suggestion.semanticKey}`);
+          return false;
+        }
+        
+        // Check content-based dismissal
+        const contentKey = `${suggestion.type}:${suggestion.originalText}:${suggestion.message}`;
+        if (dismissedSuggestionKeysRef.current.has(contentKey)) {
+          console.log(`Filtering out content-dismissed suggestion: ${contentKey}`);
+          return false;
+        }
+        
+        return true;
+      });
+      
+      console.log('Academic tone suggestions after filtering:', filteredAcademicSuggestions.length);
       
       // Convert to expected format
       const analysis = {
-        grammarIssues: filteredSuggestions.filter(s => s.type === 'grammar'),
-        vocabularyIssues: filteredSuggestions.filter(s => s.type === 'vocabulary'),
-        clarityIssues: filteredSuggestions.filter(s => s.type === 'clarity'),
-        styleIssues: filteredSuggestions.filter(s => s.type === 'style'),
-        spellingIssues: filteredSuggestions.filter(s => s.type === 'spelling'),
-        punctuationIssues: filteredSuggestions.filter(s => s.type === 'punctuation'),
-        overallScore: Math.max(0, 100 - filteredSuggestions.length * 5)
+        grammarIssues: regularSuggestions.filter(s => s.type === 'grammar'),
+        vocabularyIssues: regularSuggestions.filter(s => s.type === 'vocabulary'),
+        clarityIssues: regularSuggestions.filter(s => s.type === 'clarity'),
+        styleIssues: regularSuggestions.filter(s => s.type === 'style'),
+        spellingIssues: regularSuggestions.filter(s => s.type === 'spelling'),
+        punctuationIssues: regularSuggestions.filter(s => s.type === 'punctuation'),
+        overallScore: Math.max(0, 100 - regularSuggestions.length * 5)
       };
       
       console.log('Processed analysis:', analysis);
+      console.log('Academic tone suggestions:', filteredAcademicSuggestions);
+      
       setAiAnalysis(analysis);
+      setAcademicToneSuggestions(filteredAcademicSuggestions);
+      
+      // Show academic tone panel if there are suggestions
+      if (filteredAcademicSuggestions.length > 0) {
+        setShowAcademicTone(true);
+      } else if (academicToneSuggestions.length > 0 && filteredAcademicSuggestions.length === 0) {
+        // If we had suggestions but they were all filtered out, hide the panel
+        setShowAcademicTone(false);
+      }
     } catch (error) {
       console.error('Error analyzing content:', error);
       setAiAnalysis({
@@ -323,30 +289,45 @@ export const Editor: React.FC = () => {
     const handleAcceptSuggestion = (issue: Suggestion) => {
     if (!editor) return;
 
-    const replacement = issue.suggestions[0] || '';
+    let replacement = issue.suggestions[0] || '';
     
-    // Track multiple variations of this change to prevent re-suggesting
-    const primaryKey = `${issue.originalText}->${replacement}`;
-    acceptedChangesRef.current.add(primaryKey);
+    console.log(`🎯 Accepting suggestion: "${issue.originalText}" → "${replacement}"`);
     
-    // For clarity suggestions, also track the text segment to prevent similar suggestions
-    if (issue.type === 'clarity' && issue.originalText) {
-      // Track the original text itself to prevent similar clarity suggestions
-      acceptedChangesRef.current.add(`clarity:${issue.originalText}`);
+    // Mark suggestion as dismissed immediately to remove it from UI
+    setDismissedSuggestions(prev => new Set([...prev, issue.id]));
+    
+    // For academic tone suggestions, also dismiss them from the academic tone list
+    if (issue.type === 'academic_tone' || issue.isAcademicTone) {
+      setAcademicToneSuggestions(prev => prev.filter(s => s.id !== issue.id));
       
-      // If the original text is long, also track a shorter version
-      if (issue.originalText.length > 20) {
-        const shortVersion = issue.originalText.substring(0, 15);
-        acceptedChangesRef.current.add(`clarity:${shortVersion}`);
+      // Use semantic key for dismissal if available
+      if (issue.semanticKey) {
+        dismissedSuggestionKeysRef.current.add(issue.semanticKey);
+        console.log(`🔑 Added semantic dismissal key: ${issue.semanticKey}`);
+      }
+      
+      // Also create content-based dismissal key for backward compatibility
+      const contentKey = `${issue.type}:${issue.originalText}:${issue.message}`;
+      dismissedSuggestionKeysRef.current.add(contentKey);
+      console.log(`📝 Added content dismissal key: ${contentKey}`);
+      
+      // Smart punctuation handling for academic tone
+      const currentText = editor.getText();
+      const originalInContext = issue.originalText;
+      const contextBeforeOriginal = currentText.substring(0, currentText.indexOf(originalInContext));
+      const contextAfterOriginal = currentText.substring(currentText.indexOf(originalInContext) + originalInContext.length);
+      
+      // Check if there's already punctuation after the original text in context
+      const hasTrailingPunctuation = contextAfterOriginal.match(/^[.!?]/);
+      
+      // If there's already punctuation in the context, remove it from our replacement
+      if (hasTrailingPunctuation && replacement.match(/[.!?]$/)) {
+        replacement = replacement.replace(/[.!?]+$/, '');
+        console.log(`🔧 Removed duplicate punctuation to prevent: "${replacement}"`);
       }
     }
     
-    console.log('Tracked accepted changes:', Array.from(acceptedChangesRef.current));
-    
-    // Mark suggestion as dismissed immediately
-    setDismissedSuggestions(prev => new Set([...prev, issue.id]));
-    
-    // More robust text replacement using the Suggestion type structure
+    // Apply the text replacement
     if (issue.originalText && replacement) {
       const currentText = editor.getText();
       
@@ -367,23 +348,11 @@ export const Editor: React.FC = () => {
             .insertContent(replacement)
             .run();
             
-          console.log(`Accepted suggestion: "${issue.originalText}" -> "${replacement}"`);
+          console.log(`✅ Successfully applied suggestion: "${issue.originalText}" → "${replacement}"`);
           
-          // Clear analysis to remove highlighting immediately
-          setAiAnalysis(null);
-          
-          // Clear last analyzed text so re-analysis will run with new content
-          lastAnalyzedTextRef.current = '';
-          
-          // Pause analysis for 5 seconds to prevent immediate cycling
-          analysisPausedUntilRef.current = Date.now() + 5000;
-          console.log('Analysis paused for 5 seconds to prevent cycling');
-          
-          setTimeout(() => {
-            const newText = editor.getText();
-            console.log('Re-analyzing after suggestion acceptance:', newText);
-            analyzeContentWithAI(newText);
-          }, 5000); // Increased delay to match pause period
+          // The suggestion will disappear from UI due to dismissedSuggestions state
+          // Other suggestions will remain visible
+          // The highlighting will be updated automatically by the useEffect
         }
       }
     } else if (issue.position && replacement) {
@@ -398,23 +367,7 @@ export const Editor: React.FC = () => {
           .insertContent(replacement)
           .run();
           
-        console.log(`Accepted suggestion (position-based): "${issue.originalText}" -> "${replacement}"`);
-        
-        // Clear analysis to remove highlighting immediately
-        setAiAnalysis(null);
-        
-        // Clear last analyzed text so re-analysis will run
-        lastAnalyzedTextRef.current = '';
-        
-        // Pause analysis for 5 seconds to prevent immediate cycling
-        analysisPausedUntilRef.current = Date.now() + 5000;
-        console.log('Analysis paused for 5 seconds to prevent cycling');
-          
-        setTimeout(() => {
-          const newText = editor.getText();
-          console.log('Re-analyzing after suggestion acceptance:', newText);
-          analyzeContentWithAI(newText);
-        }, 5000); // Increased delay to match pause period
+        console.log(`✅ Successfully applied suggestion (position-based): "${issue.originalText}" → "${replacement}"`);
       }
     }
   };
@@ -428,16 +381,28 @@ export const Editor: React.FC = () => {
       ...(aiAnalysis?.clarityIssues || []),
       ...(aiAnalysis?.styleIssues || []),
       ...(aiAnalysis?.punctuationIssues || []),
+      ...academicToneSuggestions, // Include academic tone suggestions
     ];
     
     const suggestionToDismiss = allIssues.find(issue => issue.id === suggestionId);
     
     if (suggestionToDismiss) {
-      // Create a content-based key for permanent dismissal
+      // Use semantic key for dismissal if available
+      if (suggestionToDismiss.semanticKey) {
+        dismissedSuggestionKeysRef.current.add(suggestionToDismiss.semanticKey);
+        console.log(`🔑 Permanently dismissed suggestion with semantic key: "${suggestionToDismiss.semanticKey}"`);
+      }
+      
+      // Also create a content-based key for backward compatibility
       const contentKey = `${suggestionToDismiss.type}:${suggestionToDismiss.originalText}:${suggestionToDismiss.message}`;
       dismissedSuggestionKeysRef.current.add(contentKey);
-      console.log(`Permanently dismissed suggestion: "${contentKey}"`);
+      console.log(`📝 Permanently dismissed suggestion: "${contentKey}"`);
       console.log('All dismissed keys:', Array.from(dismissedSuggestionKeysRef.current));
+      
+      // For academic tone suggestions, also remove them from the academic tone list
+      if (suggestionToDismiss.type === 'academic_tone' || suggestionToDismiss.isAcademicTone) {
+        setAcademicToneSuggestions(prev => prev.filter(s => s.id !== suggestionId));
+      }
     }
     
     // Also add to the ID-based set for immediate UI updates
@@ -662,73 +627,59 @@ export const Editor: React.FC = () => {
     }
   }
 
-  const handleExportPDF = () => {
-    if (!editor) return
+  const handleExportPDF = async () => {
+    if (!editor) return;
     
-    const textContent = editor.getText()
-    const htmlContent = editor.getHTML()
-    
-    // Create a proper PDF-like content
-    const pdfContent = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>${title}</title>
-    <style>
-        body { 
-            font-family: ${fontFamily}, Arial, sans-serif; 
-            font-size: ${fontSize}px; 
-            line-height: 1.6; 
-            max-width: 800px; 
-            margin: 0 auto; 
-            padding: 40px 20px;
-            color: #333;
+    try {
+      setShowExportMenu(false);
+      
+      // Show loading state
+      const loadingToast = document.createElement('div');
+      loadingToast.textContent = 'Generating PDF...';
+      loadingToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(loadingToast);
+      
+      const htmlContent = editor.getHTML();
+      const author = user?.email || 'WordWise AI User';
+      
+      await PDFExportService.exportToPDF({
+        title: title || 'Untitled Document',
+        content: htmlContent,
+        author: author,
+        includeMetadata: true,
+        includeWordCount: true,
+        fontSize: fontSize,
+        lineSpacing: 1.5
+      });
+      
+      // Remove loading toast and show success
+      document.body.removeChild(loadingToast);
+      
+      const successToast = document.createElement('div');
+      successToast.textContent = '✅ PDF exported successfully!';
+      successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(successToast);
+      
+      setTimeout(() => {
+        if (document.body.contains(successToast)) {
+          document.body.removeChild(successToast);
         }
-        h1 { 
-            color: #2563eb; 
-            border-bottom: 2px solid #e5e7eb; 
-            padding-bottom: 10px; 
-            margin-bottom: 30px;
+      }, 3000);
+      
+    } catch (error) {
+      console.error('PDF export failed:', error);
+      
+      const errorToast = document.createElement('div');
+      errorToast.textContent = '❌ PDF export failed. Please try again.';
+      errorToast.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(errorToast);
+      
+      setTimeout(() => {
+        if (document.body.contains(errorToast)) {
+          document.body.removeChild(errorToast);
         }
-        .content { 
-            margin-bottom: 40px; 
-        }
-        .footer { 
-            border-top: 1px solid #e5e7eb; 
-            padding-top: 20px; 
-            text-align: center; 
-            color: #6b7280; 
-            font-size: 12px; 
-        }
-        @media print {
-            body { margin: 0; padding: 20px; }
-        }
-    </style>
-</head>
-<body>
-    <h1>${title}</h1>
-    <div class="content">${htmlContent}</div>
-    <div class="footer">
-        <p>Exported from WordWise AI on ${new Date().toLocaleDateString()}</p>
-        <p>Words: ${textContent.split(/\s+/).filter(word => word.length > 0).length} | Characters: ${textContent.length}</p>
-    </div>
-</body>
-</html>`
-    
-    const element = document.createElement('a')
-    const file = new Blob([pdfContent], {type: 'text/html'})
-    element.href = URL.createObjectURL(file)
-    element.download = `${title || 'document'}.html`
-    document.body.appendChild(element)
-    element.click()
-    document.body.removeChild(element)
-    setShowExportMenu(false)
-    
-    // Show instructions for PDF conversion
-    setTimeout(() => {
-      alert('HTML file downloaded! To convert to PDF:\n1. Open the downloaded HTML file in your browser\n2. Press Ctrl+P (or Cmd+P on Mac)\n3. Choose "Save as PDF" as the printer\n4. Click Save')
-    }, 500)
+      }, 3000);
+    }
   }
 
   const handleExportWord = () => {
@@ -759,6 +710,89 @@ ${textContent.replace(/\n/g, '\\par ')}
     setShowExportMenu(false)
   }
 
+  const handleExportAnalytics = async () => {
+    if (!editor || !aiAnalysis) return;
+    
+    try {
+      setShowExportMenu(false);
+      
+      // Show loading state
+      const loadingToast = document.createElement('div');
+      loadingToast.textContent = 'Generating Analytics PDF...';
+      loadingToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(loadingToast);
+      
+      const htmlContent = editor.getHTML();
+      const textContent = editor.getText();
+      const author = user?.email || 'WordWise AI User';
+      
+      // Collect all suggestions for analytics
+      const allSuggestions = [
+        ...(aiAnalysis.grammarIssues || []),
+        ...(aiAnalysis.spellingIssues || []),
+        ...(aiAnalysis.vocabularyIssues || []),
+        ...(aiAnalysis.clarityIssues || []),
+        ...(aiAnalysis.styleIssues || []),
+        ...(aiAnalysis.punctuationIssues || [])
+      ];
+      
+      // Calculate analytics
+      const wordCount = textContent.trim().split(/\s+/).filter(word => word.length > 0).length;
+      const sentenceCount = textContent.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
+      const avgWordsPerSentence = Math.round(wordCount / Math.max(sentenceCount, 1));
+      const readingTime = Math.ceil(wordCount / 200); // Assuming 200 words per minute
+      
+      await PDFExportService.exportWithAnalytics({
+        title: title || 'Untitled Document',
+        content: htmlContent,
+        author: author,
+        writingScore: aiAnalysis.overallScore,
+        suggestions: allSuggestions.map(s => ({
+          type: s.type,
+          message: s.message,
+          originalText: s.originalText || ''
+        })),
+        analytics: {
+          readingTime: `${readingTime} minute${readingTime !== 1 ? 's' : ''}`,
+          sentenceCount,
+          avgWordsPerSentence
+        },
+        includeMetadata: true,
+        includeWordCount: true,
+        fontSize: fontSize,
+        lineSpacing: 1.5
+      });
+      
+      // Remove loading toast and show success
+      document.body.removeChild(loadingToast);
+      
+      const successToast = document.createElement('div');
+      successToast.textContent = '✅ Analytics PDF exported successfully!';
+      successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(successToast);
+      
+      setTimeout(() => {
+        if (document.body.contains(successToast)) {
+          document.body.removeChild(successToast);
+        }
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Analytics PDF export failed:', error);
+      
+      const errorToast = document.createElement('div');
+      errorToast.textContent = '❌ Analytics export failed. Please try again.';
+      errorToast.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(errorToast);
+      
+      setTimeout(() => {
+        if (document.body.contains(errorToast)) {
+          document.body.removeChild(errorToast);
+        }
+      }, 3000);
+    }
+  }
+
   const insertFormatting = (before: string, after: string = '') => {
     const textarea = textareaRef.current
     if (!textarea) return
@@ -779,13 +813,35 @@ ${textContent.replace(/\n/g, '\\par ')}
 
   // Function to reset suggestion tracking
   const resetSuggestionTracking = useCallback(() => {
-    acceptedChangesRef.current.clear();
     dismissedSuggestionKeysRef.current.clear();
     setDismissedSuggestions(new Set());
     lastAnalyzedTextRef.current = '';
     setAiAnalysis(null);
-    console.log('Reset all suggestion tracking (accepted, dismissed, and analysis)');
+    setAcademicToneSuggestions([]);
+    console.log('Reset all suggestion tracking (dismissed and analysis)');
   }, []);
+
+  // Academic tone analysis function - trigger re-analysis with focus on academic tone
+  const analyzeAcademicTone = useCallback(async () => {
+    const text = editor?.getText();
+    if (!text?.trim()) return;
+
+    setIsAnalyzingTone(true);
+    try {
+      // Clear previous analysis to force re-analysis
+      lastAnalyzedTextRef.current = '';
+      await analyzeContentWithAI(text);
+      
+      // If no academic tone suggestions, show panel with encouragement
+      setTimeout(() => {
+        setShowAcademicTone(true);
+      }, 100);
+    } catch (error) {
+      console.error('Academic tone analysis failed:', error);
+    } finally {
+      setIsAnalyzingTone(false);
+    }
+  }, [editor, analyzeContentWithAI]);
 
     return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
@@ -860,13 +916,32 @@ ${textContent.replace(/\n/g, '\\par ')}
                 <Download className="h-4 w-4 mr-2" />Export
             </Button>
               {showExportMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
                   <button
                     onClick={handleExportPDF}
                     className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                   >
                     <FileText className="h-4 w-4 mr-2" />
-                    Export as HTML/PDF
+                    Export as PDF
+                  </button>
+                  {aiAnalysis && (
+                    <button
+                      onClick={handleExportAnalytics}
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                    >
+                      <Brain className="h-4 w-4 mr-2" />
+                      Export with Analytics
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowExportMenu(false);
+                      analyzeAcademicTone();
+                    }}
+                    className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                  >
+                    <Brain className="h-4 w-4 mr-2 text-blue-500" />
+                    Check Academic Tone
                   </button>
                   <button
                     onClick={handleExportWord}
@@ -900,6 +975,17 @@ ${textContent.replace(/\n/g, '\\par ')}
                         <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleMark('underline').run()} className={editor.isActive('underline') ? 'bg-gray-200 dark:bg-gray-700' : ''}><UnderlineIcon className="h-4 w-4"/></Button>
                         <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={editor.isActive('bulletList') ? 'bg-gray-200 dark:bg-gray-700' : ''}><List className="h-4 w-4"/></Button>
                         <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={editor.isActive('orderedList') ? 'bg-gray-200 dark:bg-gray-700' : ''}><ListOrdered className="h-4 w-4"/></Button>
+                        <div className="border-l border-gray-300 dark:border-gray-600 mx-2 h-6"></div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={analyzeAcademicTone}
+                          disabled={isAnalyzingTone}
+                          className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        >
+                          {isAnalyzingTone ? <Loader className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+                          <span className="ml-1 text-xs">Academic Tone</span>
+                        </Button>
           </div>
         )}
               <EditorContent editor={editor} />
@@ -952,6 +1038,97 @@ ${textContent.replace(/\n/g, '\\par ')}
                     )}
                     </div>
                   </div>
+
+                  {/* Academic Tone Guidance Panel */}
+                  {showAcademicTone && (
+                    <div className="mt-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold flex items-center">
+                          <Brain className="h-5 w-5 text-blue-500 mr-2" />
+                          Academic Tone Guidance
+                          {isAnalyzingTone && <Loader className="h-4 w-4 ml-2 animate-spin" />}
+                        </h3>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => setShowAcademicTone(false)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+              </div>
+
+                      <div className="space-y-3 max-h-[40vh] overflow-y-auto">
+                        {academicToneSuggestions.length === 0 && !isAnalyzingTone ? (
+                          <div className="text-center py-6">
+                            <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
+                            <p className="font-medium text-green-600 dark:text-green-400">
+                              Great academic tone! Your writing maintains appropriate formality.
+                            </p>
+                    </div>
+                        ) : (
+                          academicToneSuggestions.map((suggestion) => (
+                            <div
+                              key={suggestion.id}
+                              className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4"
+                            >
+                              <div className="flex justify-between items-start mb-3">
+                                <h4 className="font-medium text-blue-800 dark:text-blue-200 text-sm">
+                                  {suggestion.message}
+                                </h4>
+                                <div className="flex space-x-1">
+                                  <Button
+                                    size="xs"
+                                    onClick={() => handleAcceptSuggestion(suggestion)}
+                                    className="bg-green-500 hover:bg-green-600 text-white"
+                                  >
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="xs"
+                                    variant="ghost"
+                                    onClick={() => handleRejectSuggestion(suggestion.id)}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                              
+                              <div className="space-y-3">
+                                <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                  This is your sentence formalized and with better academic tone:
+                                </div>
+                                
+                                {suggestion.originalText && (
+                                  <div>
+                                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Original:</span>
+                                    <div className="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-400 px-3 py-2 mt-1 text-sm italic">
+                                      "{suggestion.originalText}"
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {suggestion.suggestions && suggestion.suggestions.length > 0 && (
+                                  <div>
+                                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Suggested:</span>
+                                    <div className="bg-green-100 dark:bg-green-900/30 border-l-4 border-green-400 px-3 py-2 mt-1 text-sm font-medium">
+                                      "{suggestion.suggestions[0]}"
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {suggestion.explanation && (
+                                  <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-2 rounded text-xs text-gray-600 dark:text-gray-400 mt-2">
+                                    <div className="font-medium mb-1">Why this improves your writing:</div>
+                                    <div className="whitespace-pre-line">{suggestion.explanation}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
               </div>
                     </div>
                     </div>
