@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
+import { useDocumentImport } from '@/hooks/useDocumentImport'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { FileDropZoneCompact } from '@/components/ui/FileDropZone'
 import { firestoreService, CloudDocument } from '@/services/firestore'
 import { 
   Plus, 
@@ -41,7 +43,14 @@ export const Documents: React.FC = () => {
   const [filterBy, setFilterBy] = useState<'all' | 'recent'>('all')
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [isImporting, setIsImporting] = useState(false)
+  const { importDocument, isImporting } = useDocumentImport({
+    onSuccess: () => {
+      // Refresh documents list after successful import
+      loadDocuments()
+    },
+    navigateToEditor: true,
+    saveToLocalStorage: true
+  })
 
   // Load documents from localStorage
   const loadDocuments = async () => {
@@ -161,84 +170,18 @@ export const Documents: React.FC = () => {
     setFilteredDocuments(filtered)
   }, [documents, searchTerm, sortBy])
 
-  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileImport = async (file: File) => {
+    await importDocument(file)
+  }
+
+  const handleLegacyFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
-    setIsImporting(true)
-    try {
-      let content = ''
-      const fileName = file.name.replace(/\.[^/.]+$/, '') // Remove extension
-
-      if (file.type === 'text/plain') {
-        // Handle plain text files
-        content = await file.text()
-      } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
-                 file.type === 'application/msword' ||
-                 file.name.endsWith('.docx') || 
-                 file.name.endsWith('.doc')) {
-        // Handle Word documents
-        try {
-          // For now, we'll show a message that Word import needs additional setup
-          toast.error('Word document import requires additional setup. Please copy and paste your content into the editor for now.')
-          return
-        } catch (error) {
-          console.error('Error reading Word document:', error)
-          toast.error('Failed to read Word document. Please try copying and pasting your content.')
-          return
-        }
-      } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-        // Handle PDF files
-        toast.error('PDF import requires additional setup. Please copy and paste your content into the editor for now.')
-        return
-      } else if (file.type === 'application/rtf' || file.name.endsWith('.rtf')) {
-        // Handle RTF files
-        content = await file.text()
-        // Remove RTF formatting codes for basic text extraction
-        content = content.replace(/\\[a-z]{1,32}(-?\d{1,10})?[ ]?|\\'[0-9a-f]{2}|\\([^a-z])|[{}]|\r\n?|\n/gi, ' ')
-                        .replace(/\s+/g, ' ')
-                        .trim()
-      } else {
-        toast.error('Unsupported file type. Please use .txt, .rtf, .doc, .docx, or .pdf files.')
-        return
-      }
-
-      if (content.trim()) {
-        // Create a new document with imported content
-        const newDocument: LocalDocument = {
-          id: `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          title: fileName || 'Imported Document',
-          content: content.trim(),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          wordCount: content.trim().split(/\s+/).filter(word => word.length > 0).length,
-          characterCount: content.length
-        }
-
-        // Save to localStorage
-        const existingDocs = JSON.parse(localStorage.getItem('documents') || '[]')
-        const updatedDocs = [newDocument, ...existingDocs]
-        localStorage.setItem('documents', JSON.stringify(updatedDocs))
-
-        // Update local state
-        setDocuments(prev => [newDocument, ...prev])
-        
-        toast.success(`File "${fileName}" imported successfully!`)
-        
-        // Navigate to editor with the imported document
-        navigate(`/editor?imported=${newDocument.id}`)
-      } else {
-        toast.error('The imported file appears to be empty or could not be read.')
-      }
-    } catch (error) {
-      console.error('Error importing file:', error)
-      toast.error('Failed to import file. Please try again.')
-    } finally {
-      setIsImporting(false)
-      // Reset the file input
-      event.target.value = ''
-    }
+    await handleFileImport(file)
   }
+
+
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
@@ -270,7 +213,7 @@ export const Documents: React.FC = () => {
                 type="file"
                 id="file-import"
                 accept=".txt,.rtf,.doc,.docx,.pdf"
-                onChange={handleFileImport}
+                onChange={handleLegacyFileImport}
                 className="hidden"
                 disabled={isImporting}
               />
@@ -320,6 +263,19 @@ export const Documents: React.FC = () => {
               </select>
             </div>
           </div>
+        </div>
+
+        {/* Import Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6 transition-colors">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Import Document</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Drag and drop or click to browse</p>
+          </div>
+          <FileDropZoneCompact
+            onFileSelect={handleFileImport}
+            disabled={isImporting}
+            className="max-w-md"
+          />
         </div>
 
         {/* Documents Grid */}

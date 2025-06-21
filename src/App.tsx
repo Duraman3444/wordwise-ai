@@ -12,6 +12,7 @@ import { Profile } from './pages/Profile'
 import { Login } from './pages/auth/Login'
 import { Register } from './pages/auth/Register'
 import { Demo } from './pages/Demo'
+import { ImportDemo } from './pages/ImportDemo'
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<Landing />} />
                 <Route path="/demo" element={<Demo />} />
+                <Route path="/import-demo" element={<ImportDemo />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route 
