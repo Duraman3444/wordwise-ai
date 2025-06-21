@@ -1,4 +1,4 @@
-import nlp from 'compromise'
+// import nlp from 'compromise' // Temporarily disabled for build
 
 export interface GrammarError {
   id: string
@@ -345,8 +345,8 @@ export class GrammarChecker {
     const errors: Omit<GrammarError, 'id'>[] = []
 
     try {
-      const doc = nlp(text)
-      const sentences = doc.sentences().out('array')
+      // Temporarily simplified without nlp library
+      const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0)
 
       sentences.forEach((sentence: string) => {
         const sentenceStart = text.indexOf(sentence)

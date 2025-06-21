@@ -1,4 +1,3 @@
-import * as path from 'path';
 // Ensure PDF worker is configured
 import '../utils/pdfWorker';
 
@@ -174,7 +173,7 @@ export class PDFParserService {
    * Mock PDF extraction - replace with real PDF parsing
    */
   private async mockPDFExtraction(filePath: string): Promise<string> {
-    const fileName = path.basename(filePath).toLowerCase();
+    const fileName = filePath.split('/').pop()?.toLowerCase() || filePath.toLowerCase();
     
     if (fileName.includes('dictionary') || fileName.includes('vocab')) {
       return `

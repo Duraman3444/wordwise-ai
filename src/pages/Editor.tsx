@@ -711,7 +711,7 @@ export const Editor: React.FC = () => {
       document.body.removeChild(loadingToast);
       
       const successToast = document.createElement('div');
-      successToast.textContent = '✅ Word document exported successfully!';
+      successToast.textContent = '✅ Word document (RTF) exported successfully!';
       successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
       document.body.appendChild(successToast);
       
@@ -876,7 +876,7 @@ export const Editor: React.FC = () => {
       document.body.removeChild(loadingToast);
       
       const successToast = document.createElement('div');
-      successToast.textContent = '✅ Analytics Word document exported successfully!';
+      successToast.textContent = '✅ Analytics Word document (RTF) exported successfully!';
       successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
       document.body.appendChild(successToast);
       
@@ -1057,7 +1057,7 @@ export const Editor: React.FC = () => {
                     className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                   >
                     <FileText className="h-4 w-4 mr-2" />
-                    Export as Word (.docx)
+                    Export as Word (.rtf)
                   </button>
                   {aiAnalysis && (
                     <button
