@@ -69,6 +69,7 @@ export interface Suggestion {
   accepted?: boolean
   timestamp: Date
   isAcademicTone?: boolean
+  semanticKey?: string
 }
 
 export type SuggestionType = 

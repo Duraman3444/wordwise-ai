@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { AIService } from '@/services/ai'
 import { Suggestion } from '@/types'
 import PDFExportService from '@/services/pdfExport'
+import { WordExportService } from '@/services/wordExport'
 import { 
   Save, 
   Download, 
@@ -139,7 +140,7 @@ export const Editor: React.FC = () => {
       const suggestions = await AIService.analyzeText(text, 'professional', 'document');
       console.log('Received suggestions:', suggestions);
       
-      // IMPROVED filtering - filter out permanently dismissed suggestions and check for resolved text
+      // SIMPLIFIED filtering - only filter out permanently dismissed suggestions
       const filteredSuggestions = suggestions.filter(suggestion => {
         // Check if this suggestion has been permanently dismissed
         const contentKey = `${suggestion.type}:${suggestion.originalText}:${suggestion.message}`;
@@ -150,36 +151,13 @@ export const Editor: React.FC = () => {
           return false;
         }
         
-        // For academic tone suggestions, check if the problematic pattern still exists
-        if (suggestion.type === 'academic_tone') {
-          const originalText = suggestion.originalText || '';
-          
-          // Check if the original problematic text still exists in the current text
-          if (!text.includes(originalText)) {
-            console.log(`Filtering out academic tone suggestion - original text no longer exists: "${originalText}"`);
-            return false;
-          }
-          
-          // Additional check: if this looks like it was already fixed, filter it out
-          if (suggestion.suggestions && suggestion.suggestions[0]) {
-            const improvedText = suggestion.suggestions[0];
-            // If the improved text already exists in the current text, the suggestion was likely applied
-            if (text.includes(improvedText)) {
-              console.log(`Filtering out academic tone suggestion - improved text already exists: "${improvedText}"`);
-              // Add to dismissed keys to prevent future occurrences
-              dismissedSuggestionKeysRef.current.add(contentKey);
-              return false;
-            }
-          }
-        } else {
-          // For other suggestion types, robust check: only filter if the original text no longer exists
-          const originalText = suggestion.originalText || '';
-          const originalTextExists = originalText.length === 0 || text.includes(originalText);
-          
-          if (!originalTextExists) {
-            console.log(`Filtering out suggestion - text no longer exists: "${originalText}"`);
-            return false;
-          }
+        // Robust check: only filter if the original text no longer exists
+        const originalText = suggestion.originalText || '';
+        const originalTextExists = originalText.length === 0 || text.includes(originalText);
+        
+        if (!originalTextExists) {
+          console.log(`Filtering out suggestion - text no longer exists: "${originalText}"`);
+          return false;
         }
         
         return true;
@@ -190,6 +168,26 @@ export const Editor: React.FC = () => {
       // Separate academic tone suggestions from regular suggestions
       const regularSuggestions = filteredSuggestions.filter(s => s.type !== 'academic_tone');
       const academicToneSuggestions = filteredSuggestions.filter(s => s.type === 'academic_tone');
+      
+      // Filter out academic tone suggestions that have been semantically dismissed
+      const filteredAcademicSuggestions = academicToneSuggestions.filter(suggestion => {
+        // Check semantic key dismissal
+        if (suggestion.semanticKey && dismissedSuggestionKeysRef.current.has(suggestion.semanticKey)) {
+          console.log(`Filtering out semantically dismissed suggestion: ${suggestion.semanticKey}`);
+          return false;
+        }
+        
+        // Check content-based dismissal
+        const contentKey = `${suggestion.type}:${suggestion.originalText}:${suggestion.message}`;
+        if (dismissedSuggestionKeysRef.current.has(contentKey)) {
+          console.log(`Filtering out content-dismissed suggestion: ${contentKey}`);
+          return false;
+        }
+        
+        return true;
+      });
+      
+      console.log('Academic tone suggestions after filtering:', filteredAcademicSuggestions.length);
       
       // Convert to expected format
       const analysis = {
@@ -203,14 +201,17 @@ export const Editor: React.FC = () => {
       };
       
       console.log('Processed analysis:', analysis);
-      console.log('Academic tone suggestions:', academicToneSuggestions);
+      console.log('Academic tone suggestions:', filteredAcademicSuggestions);
       
       setAiAnalysis(analysis);
-      setAcademicToneSuggestions(academicToneSuggestions);
+      setAcademicToneSuggestions(filteredAcademicSuggestions);
       
       // Show academic tone panel if there are suggestions
-      if (academicToneSuggestions.length > 0) {
+      if (filteredAcademicSuggestions.length > 0) {
         setShowAcademicTone(true);
+      } else if (academicToneSuggestions.length > 0 && filteredAcademicSuggestions.length === 0) {
+        // If we had suggestions but they were all filtered out, hide the panel
+        setShowAcademicTone(false);
       }
     } catch (error) {
       console.error('Error analyzing content:', error);
@@ -300,9 +301,16 @@ export const Editor: React.FC = () => {
     if (issue.type === 'academic_tone' || issue.isAcademicTone) {
       setAcademicToneSuggestions(prev => prev.filter(s => s.id !== issue.id));
       
-      // Create content-based dismissal key to prevent re-appearance
+      // Use semantic key for dismissal if available
+      if (issue.semanticKey) {
+        dismissedSuggestionKeysRef.current.add(issue.semanticKey);
+        console.log(`🔑 Added semantic dismissal key: ${issue.semanticKey}`);
+      }
+      
+      // Also create content-based dismissal key for backward compatibility
       const contentKey = `${issue.type}:${issue.originalText}:${issue.message}`;
       dismissedSuggestionKeysRef.current.add(contentKey);
+      console.log(`📝 Added content dismissal key: ${contentKey}`);
       
       // Smart punctuation handling for academic tone
       const currentText = editor.getText();
@@ -380,10 +388,16 @@ export const Editor: React.FC = () => {
     const suggestionToDismiss = allIssues.find(issue => issue.id === suggestionId);
     
     if (suggestionToDismiss) {
-      // Create a content-based key for permanent dismissal
+      // Use semantic key for dismissal if available
+      if (suggestionToDismiss.semanticKey) {
+        dismissedSuggestionKeysRef.current.add(suggestionToDismiss.semanticKey);
+        console.log(`🔑 Permanently dismissed suggestion with semantic key: "${suggestionToDismiss.semanticKey}"`);
+      }
+      
+      // Also create a content-based key for backward compatibility
       const contentKey = `${suggestionToDismiss.type}:${suggestionToDismiss.originalText}:${suggestionToDismiss.message}`;
       dismissedSuggestionKeysRef.current.add(contentKey);
-      console.log(`Permanently dismissed suggestion: "${contentKey}"`);
+      console.log(`📝 Permanently dismissed suggestion: "${contentKey}"`);
       console.log('All dismissed keys:', Array.from(dismissedSuggestionKeysRef.current));
       
       // For academic tone suggestions, also remove them from the academic tone list
@@ -669,32 +683,58 @@ export const Editor: React.FC = () => {
     }
   }
 
-  const handleExportWord = () => {
-    if (!editor) return
+  const handleExportWord = async () => {
+    if (!editor) return;
     
-    const textContent = editor.getText()
-    
-    // Create proper Word document content with RTF format
-    const rtfContent = `{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}
-{\\colortbl;\\red0\\green0\\blue0;\\red0\\green0\\blue255;}
-\\f0\\fs24 {\\b\\fs32\\cf2 ${title}\\par}
-\\par
-${textContent.replace(/\n/g, '\\par ')}
-\\par
-\\par
-{\\i Exported from WordWise AI on ${new Date().toLocaleDateString()}}
-\\par
-{\\fs18 Words: ${textContent.split(/\s+/).filter(word => word.length > 0).length} | Characters: ${textContent.length}}
-}`
-    
-    const element = document.createElement('a')
-    const file = new Blob([rtfContent], {type: 'application/rtf'})
-    element.href = URL.createObjectURL(file)
-    element.download = `${title || 'document'}.rtf`
-    document.body.appendChild(element)
-    element.click()
-    document.body.removeChild(element)
-    setShowExportMenu(false)
+    try {
+      setShowExportMenu(false);
+      
+      // Show loading state
+      const loadingToast = document.createElement('div');
+      loadingToast.textContent = 'Generating Word document...';
+      loadingToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(loadingToast);
+      
+      const htmlContent = editor.getHTML();
+      const author = user?.email || 'WordWise AI User';
+      
+      await WordExportService.exportToWordWithFormatting({
+        title: title || 'Untitled Document',
+        content: htmlContent,
+        author: author,
+        includeMetadata: true,
+        includeWordCount: true,
+        fontSize: fontSize
+      });
+      
+      // Remove loading toast and show success
+      document.body.removeChild(loadingToast);
+      
+      const successToast = document.createElement('div');
+      successToast.textContent = '✅ Word document exported successfully!';
+      successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(successToast);
+      
+      setTimeout(() => {
+        if (document.body.contains(successToast)) {
+          document.body.removeChild(successToast);
+        }
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Word export failed:', error);
+      
+      const errorToast = document.createElement('div');
+      errorToast.textContent = '❌ Word export failed. Please try again.';
+      errorToast.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(errorToast);
+      
+      setTimeout(() => {
+        if (document.body.contains(errorToast)) {
+          document.body.removeChild(errorToast);
+        }
+      }, 3000);
+    }
   }
 
   const handleExportAnalytics = async () => {
@@ -769,6 +809,88 @@ ${textContent.replace(/\n/g, '\\par ')}
       
       const errorToast = document.createElement('div');
       errorToast.textContent = '❌ Analytics export failed. Please try again.';
+      errorToast.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(errorToast);
+      
+      setTimeout(() => {
+        if (document.body.contains(errorToast)) {
+          document.body.removeChild(errorToast);
+        }
+      }, 3000);
+    }
+  }
+
+  const handleExportWordAnalytics = async () => {
+    if (!editor || !aiAnalysis) return;
+    
+    try {
+      setShowExportMenu(false);
+      
+      // Show loading state
+      const loadingToast = document.createElement('div');
+      loadingToast.textContent = 'Generating Analytics Word document...';
+      loadingToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(loadingToast);
+      
+      const htmlContent = editor.getHTML();
+      const textContent = editor.getText();
+      const author = user?.email || 'WordWise AI User';
+      
+      // Collect all suggestions for analytics
+      const allSuggestions = [
+        ...(aiAnalysis.grammarIssues || []),
+        ...(aiAnalysis.spellingIssues || []),
+        ...(aiAnalysis.vocabularyIssues || []),
+        ...(aiAnalysis.clarityIssues || []),
+        ...(aiAnalysis.styleIssues || []),
+        ...(aiAnalysis.punctuationIssues || [])
+      ];
+      
+      // Calculate analytics
+      const wordCount = textContent.trim().split(/\s+/).filter(word => word.length > 0).length;
+      const sentenceCount = textContent.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
+      const avgWordsPerSentence = Math.round(wordCount / Math.max(sentenceCount, 1));
+      const readingTime = Math.ceil(wordCount / 200); // Assuming 200 words per minute
+      
+      await WordExportService.exportWithAnalytics({
+        title: title || 'Untitled Document',
+        content: htmlContent,
+        author: author,
+        writingScore: aiAnalysis.overallScore,
+        suggestions: allSuggestions.map(s => ({
+          type: s.type,
+          message: s.message,
+          originalText: s.originalText || ''
+        })),
+        analytics: {
+          readingTime: `${readingTime} minute${readingTime !== 1 ? 's' : ''}`,
+          sentenceCount,
+          avgWordsPerSentence
+        },
+        includeMetadata: true,
+        includeWordCount: true,
+        fontSize: fontSize
+      });
+      
+      // Remove loading toast and show success
+      document.body.removeChild(loadingToast);
+      
+      const successToast = document.createElement('div');
+      successToast.textContent = '✅ Analytics Word document exported successfully!';
+      successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      document.body.appendChild(successToast);
+      
+      setTimeout(() => {
+        if (document.body.contains(successToast)) {
+          document.body.removeChild(successToast);
+        }
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Analytics Word export failed:', error);
+      
+      const errorToast = document.createElement('div');
+      errorToast.textContent = '❌ Analytics Word export failed. Please try again.';
       errorToast.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
       document.body.appendChild(errorToast);
       
@@ -917,7 +1039,7 @@ ${textContent.replace(/\n/g, '\\par ')}
                       className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                     >
                       <Brain className="h-4 w-4 mr-2" />
-                      Export with Analytics
+                      Export PDF with Analytics
                     </button>
                   )}
                   <button
@@ -935,8 +1057,17 @@ ${textContent.replace(/\n/g, '\\par ')}
                     className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                   >
                     <FileText className="h-4 w-4 mr-2" />
-                    Export as Word (RTF)
+                    Export as Word (.docx)
                   </button>
+                  {aiAnalysis && (
+                    <button
+                      onClick={handleExportWordAnalytics}
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                    >
+                      <Brain className="h-4 w-4 mr-2" />
+                      Export Word with Analytics
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1042,7 +1173,7 @@ ${textContent.replace(/\n/g, '\\par ')}
                         >
                           <X className="h-3 w-3" />
                         </Button>
-                      </div>
+              </div>
 
                       <div className="space-y-3 max-h-[40vh] overflow-y-auto">
                         {academicToneSuggestions.length === 0 && !isAnalyzingTone ? (
@@ -1051,7 +1182,7 @@ ${textContent.replace(/\n/g, '\\par ')}
                             <p className="font-medium text-green-600 dark:text-green-400">
                               Great academic tone! Your writing maintains appropriate formality.
                             </p>
-                          </div>
+                    </div>
                         ) : (
                           academicToneSuggestions.map((suggestion) => (
                             <div
