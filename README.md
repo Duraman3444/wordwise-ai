@@ -141,11 +141,32 @@ wordwise-ai/
 │   └── App.tsx            # Main App component
 ├── public/                 # Static assets
 ├── functions/              # Firebase Cloud Functions
+├── docs/                   # Project documentation
+│   ├── ARCHITECTURE.md     # System architecture and design
+│   ├── WIREFRAMES.md       # UI wireframes and user flows
+│   └── TOOL_JUSTIFICATION.md # Technology stack decisions
 ├── MVP_PLAN.md            # Detailed MVP development plan
+├── PRD.md                 # Product Requirements Document
 ├── firebase.json          # Firebase configuration
 ├── firestore.rules        # Firestore security rules
 └── package.json           # Dependencies and scripts
 ```
+
+## 📖 Documentation
+
+### Core Documentation
+- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design, data flow, and technical architecture
+- **[UI Wireframes](docs/WIREFRAMES.md)** - Interface mockups and user interaction flows  
+- **[Technology Decisions](docs/TOOL_JUSTIFICATION.md)** - Detailed rationale for technology stack choices
+- **[Cost Analysis](docs/COST_ANALYSIS.md)** - Business model, pricing, and break-even analysis
+- **[User Guide](docs/USER_GUIDE.md)** - Complete guide for students and educators
+- **[Product Requirements](PRD.md)** - Comprehensive product specification and business strategy
+- **[MVP Development Plan](MVP_PLAN.md)** - 7-day development roadmap and implementation details
+
+### Quick Links
+- **[Setup Guide](SETUP.md)** - Step-by-step development environment setup
+- **[Firebase Setup](FIREBASE_SETUP.md)** - Backend configuration and deployment
+- **[Security Guide](SECURITY_GUIDE.md)** - Security best practices and API key management
 
 ## 🎯 MVP User Stories
 
