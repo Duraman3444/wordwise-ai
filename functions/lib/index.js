@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.analyzeText = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const v2_1 = require("firebase-functions/v2");
-const params_1 = require("firebase-functions/params");
+const functions = require("firebase-functions");
 const openai_1 = require("openai");
 // Set global options for better performance
 (0, v2_1.setGlobalOptions)({
@@ -11,24 +11,26 @@ const openai_1 = require("openai");
     timeoutSeconds: 30,
     memory: "256MiB"
 });
-// Define the OpenAI API key as a secret parameter
-const openaiApiKey = (0, params_1.defineSecret)('OPENAI_API_KEY');
 exports.analyzeText = (0, https_1.onRequest)({
+    timeoutSeconds: 30,
     cors: true,
-    secrets: [openaiApiKey],
-    timeoutSeconds: 30
+    invoker: 'public', // Allow unauthenticated access
 }, async (request, response) => {
     var _a, _b;
     const startTime = Date.now();
     try {
-        console.log('Function called with method:', request.method);
-        // Only allow POST requests
-        if (request.method !== 'POST') {
-            response.status(405).json({ error: 'Method Not Allowed' });
+        // Handle CORS preflight
+        if (request.method === 'OPTIONS') {
+            response.set('Access-Control-Allow-Origin', '*');
+            response.set('Access-Control-Allow-Methods', 'POST');
+            response.set('Access-Control-Allow-Headers', 'Content-Type');
+            response.status(204).send('');
             return;
         }
-        // Get the API key from the secret
-        const apiKey = openaiApiKey.value();
+        console.log('Function called with method:', request.method);
+        console.log('Function called with body:', JSON.stringify(request.body));
+        // Get the API key from Firebase config
+        const apiKey = functions.config().openai.key;
         if (!apiKey || !apiKey.startsWith('sk-')) {
             console.error('OpenAI API key not found or invalid');
             response.status(500).json({ error: 'API key not configured properly' });
@@ -40,6 +42,7 @@ exports.analyzeText = (0, https_1.onRequest)({
         });
         const { text, userType = 'student', documentType = 'essay' } = request.body || {};
         if (!text || typeof text !== 'string') {
+            console.error('Missing or invalid text parameter:', { text, userType, documentType });
             response.status(400).json({ error: 'Text is required and must be a string' });
             return;
         }
@@ -94,8 +97,7 @@ Be thorough - if you see 5+ errors, report ALL of them. Return ONLY JSON array.`
         console.log('OpenAI response received in:', Date.now() - startTime, 'ms');
         if (!aiResponse) {
             console.error('No response from OpenAI');
-            response.status(500).json({ error: 'No response from AI' });
-            return;
+            throw new Error('No response from AI');
         }
         try {
             // Clean up the AI response - remove markdown code blocks if present
@@ -110,7 +112,8 @@ Be thorough - if you see 5+ errors, report ALL of them. Return ONLY JSON array.`
             const suggestions = JSON.parse(cleanResponse);
             console.log('Successfully parsed suggestions:', Array.isArray(suggestions) ? suggestions.length : 'not array');
             console.log('Total function time:', Date.now() - startTime, 'ms');
-            response.json({
+            response.set('Access-Control-Allow-Origin', '*');
+            response.status(200).json({
                 analysisResult: suggestions,
                 processingTime: Date.now() - startTime
             });
@@ -118,17 +121,18 @@ Be thorough - if you see 5+ errors, report ALL of them. Return ONLY JSON array.`
         catch (parseError) {
             console.error('JSON parse error:', parseError);
             console.error('Raw AI response:', aiResponse.substring(0, 200));
+            response.set('Access-Control-Allow-Origin', '*');
             response.status(500).json({ error: 'Invalid AI response format' });
+            return;
         }
     }
     catch (error) {
         console.error('Function error:', error);
         const totalTime = Date.now() - startTime;
         console.error('Error occurred after:', totalTime, 'ms');
+        response.set('Access-Control-Allow-Origin', '*');
         response.status(500).json({
-            error: 'Internal server error',
-            details: error instanceof Error ? error.message : String(error),
-            processingTime: totalTime
+            error: error instanceof Error ? error.message : String(error)
         });
     }
 });

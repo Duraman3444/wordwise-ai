@@ -1,5 +1,5 @@
 // WARNING: OpenAI API keys should NEVER be exposed to client-side code
-// This implementation needs to be moved to a secure backend/serverless function
+// This implementation uses Firebase Functions for secure backend processing
 
 // Initialize OpenAI client - MOVED TO BACKEND
 // const openai = new OpenAI({
@@ -7,12 +7,13 @@
 //   dangerouslyAllowBrowser: true, // Note: In production, use server-side API
 // })
 
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '../config/firebase'
 import { Suggestion, SuggestionType, TextPosition, AIAnalysis } from '@/types'
 
 export class AIService {
   /**
-   * Analyze text and generate suggestions
-   * TODO: Move this to a secure backend endpoint
+   * Analyze text and generate suggestions using Firebase Functions
    */
   static async analyzeText(
     text: string,
@@ -22,11 +23,18 @@ export class AIService {
     const startTime = Date.now();
     
     try {
-      console.log('🚀 Starting GPT analysis...', { textLength: text.length, userType, documentType });
+      console.log('🚀 Starting GPT analysis via Firebase Functions...', { 
+        textLength: text.length, 
+        userType, 
+        documentType 
+      });
       
-      // GPT-first approach with 15-second timeout
+      // Call Firebase HTTP Function directly for better CORS support
+      const functionUrl = 'https://analyzetext-7d2ertcnaa-uc.a.run.app';
+      
+      // Call the Firebase Function with 15-second timeout
       const response = await Promise.race([
-        fetch('https://analyzetext-7d2ertcnaa-uc.a.run.app', {
+        fetch(functionUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -35,35 +43,35 @@ export class AIService {
             text,
             userType,
             documentType,
-            includeAcademicTone: true // Request academic tone analysis
+            includeAcademicTone: true
           })
         }),
         new Promise((_, reject) => 
           setTimeout(() => reject(new Error('GPT timeout after 15 seconds')), 15000)
         )
-      ]) as Response;
+      ]) as any;
 
       if (!response.ok) {
-        throw new Error(`GPT API error: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      const aiSuggestions = data.analysisResult || [];
+      const aiSuggestions = data.analysisResult || data || [];
       
-      console.log('✅ GPT Response received:', {
+      console.log('✅ GPT Response received via Firebase Functions:', {
         clientTime: `${Date.now() - startTime}ms`,
         serverTime: `${data.processingTime || 0}ms`,
-        rawSuggestions: aiSuggestions.length,
+        rawSuggestions: Array.isArray(aiSuggestions) ? aiSuggestions.length : 0,
         suggestions: aiSuggestions
       });
 
-      // Always add local academic tone analysis as well
+      // Always add local academic tone analysis
       console.log('🎓 Adding local academic tone analysis...');
       const localAcademicSuggestions = await this.getLocalAcademicToneGuidance(text, documentType);
       console.log('🔍 Local academic tone suggestions:', localAcademicSuggestions);
 
       // Combine GPT suggestions with local academic tone analysis
-      let allSuggestions = [...aiSuggestions];
+      let allSuggestions = Array.isArray(aiSuggestions) ? [...aiSuggestions] : [];
       
       if (localAcademicSuggestions.length > 0) {
         const localFormattedSuggestions = localAcademicSuggestions.map((suggestion, index) => ({
