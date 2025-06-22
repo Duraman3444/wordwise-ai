@@ -1,6 +1,6 @@
 import { onCall, onRequest } from 'firebase-functions/v2/https';
 import { setGlobalOptions } from 'firebase-functions/v2';
-import * as functions from 'firebase-functions';
+import { defineSecret } from 'firebase-functions/params';
 import OpenAI from 'openai';
 
 // Set global options for better performance
@@ -10,8 +10,12 @@ setGlobalOptions({
   memory: "256MiB"
 });
 
+// Define the OpenAI API key as a secret parameter
+const openaiApiKey = defineSecret('OPENAI_API_KEY');
+
 export const analyzeText = onRequest(
   { 
+    secrets: [openaiApiKey],
     timeoutSeconds: 30,
     cors: true, // Enable CORS for localhost development
     invoker: 'public', // Allow unauthenticated access
@@ -32,8 +36,17 @@ export const analyzeText = onRequest(
       console.log('Function called with method:', request.method);
       console.log('Function called with body:', JSON.stringify(request.body));
       
-      // Get the API key from Firebase config
-      const apiKey = functions.config().openai.key;
+      // Get the API key from the secret and trim any whitespace/newlines
+      const apiKey = openaiApiKey.value()?.trim();
+      
+      console.log('API key status:', {
+        exists: !!apiKey,
+        length: apiKey ? apiKey.length : 0,
+        startsWithSk: apiKey ? apiKey.startsWith('sk-') : false,
+        firstChars: apiKey ? apiKey.substring(0, 10) + '...' : 'none',
+        hasNewlines: apiKey ? apiKey.includes('\n') : false,
+        hasSpaces: apiKey ? apiKey.includes(' ') : false
+      });
       
       if (!apiKey || !apiKey.startsWith('sk-')) {
         console.error('OpenAI API key not found or invalid');
@@ -142,13 +155,26 @@ Be thorough - if you see 5+ errors, report ALL of them. Return ONLY JSON array.`
         return;
       }
 
-    } catch (error) {
+        } catch (error) {
       console.error('Function error:', error);
+      console.error('Error name:', error instanceof Error ? error.name : 'Unknown');
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
       const totalTime = Date.now() - startTime;
       console.error('Error occurred after:', totalTime, 'ms');
       
+      // More specific error handling
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          console.error('API key related error');
+        } else if (error.message.includes('network') || error.message.includes('fetch') || error.message.includes('connection')) {
+          console.error('Network/connection error');
+        } else if (error.message.includes('quota') || error.message.includes('rate limit')) {
+          console.error('Rate limit or quota error');
+        }
+      }
+      
       response.set('Access-Control-Allow-Origin', '*');
-      response.status(500).json({ 
+      response.status(500).json({
         error: error instanceof Error ? error.message : String(error)
       });
     }

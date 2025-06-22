@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.analyzeText = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const v2_1 = require("firebase-functions/v2");
-const functions = require("firebase-functions");
+const params_1 = require("firebase-functions/params");
 const openai_1 = require("openai");
 // Set global options for better performance
 (0, v2_1.setGlobalOptions)({
@@ -11,12 +11,15 @@ const openai_1 = require("openai");
     timeoutSeconds: 30,
     memory: "256MiB"
 });
+// Define the OpenAI API key as a secret parameter
+const openaiApiKey = (0, params_1.defineSecret)('OPENAI_API_KEY');
 exports.analyzeText = (0, https_1.onRequest)({
+    secrets: [openaiApiKey],
     timeoutSeconds: 30,
     cors: true,
     invoker: 'public', // Allow unauthenticated access
 }, async (request, response) => {
-    var _a, _b;
+    var _a, _b, _c;
     const startTime = Date.now();
     try {
         // Handle CORS preflight
@@ -29,8 +32,16 @@ exports.analyzeText = (0, https_1.onRequest)({
         }
         console.log('Function called with method:', request.method);
         console.log('Function called with body:', JSON.stringify(request.body));
-        // Get the API key from Firebase config
-        const apiKey = functions.config().openai.key;
+        // Get the API key from the secret and trim any whitespace/newlines
+        const apiKey = (_a = openaiApiKey.value()) === null || _a === void 0 ? void 0 : _a.trim();
+        console.log('API key status:', {
+            exists: !!apiKey,
+            length: apiKey ? apiKey.length : 0,
+            startsWithSk: apiKey ? apiKey.startsWith('sk-') : false,
+            firstChars: apiKey ? apiKey.substring(0, 10) + '...' : 'none',
+            hasNewlines: apiKey ? apiKey.includes('\n') : false,
+            hasSpaces: apiKey ? apiKey.includes(' ') : false
+        });
         if (!apiKey || !apiKey.startsWith('sk-')) {
             console.error('OpenAI API key not found or invalid');
             response.status(500).json({ error: 'API key not configured properly' });
@@ -93,7 +104,7 @@ Be thorough - if you see 5+ errors, report ALL of them. Return ONLY JSON array.`
             presence_penalty: 0,
             frequency_penalty: 0
         });
-        const aiResponse = (_b = (_a = completion.choices[0]) === null || _a === void 0 ? void 0 : _a.message) === null || _b === void 0 ? void 0 : _b.content;
+        const aiResponse = (_c = (_b = completion.choices[0]) === null || _b === void 0 ? void 0 : _b.message) === null || _c === void 0 ? void 0 : _c.content;
         console.log('OpenAI response received in:', Date.now() - startTime, 'ms');
         if (!aiResponse) {
             console.error('No response from OpenAI');
@@ -128,8 +139,22 @@ Be thorough - if you see 5+ errors, report ALL of them. Return ONLY JSON array.`
     }
     catch (error) {
         console.error('Function error:', error);
+        console.error('Error name:', error instanceof Error ? error.name : 'Unknown');
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
         const totalTime = Date.now() - startTime;
         console.error('Error occurred after:', totalTime, 'ms');
+        // More specific error handling
+        if (error instanceof Error) {
+            if (error.message.includes('API key')) {
+                console.error('API key related error');
+            }
+            else if (error.message.includes('network') || error.message.includes('fetch') || error.message.includes('connection')) {
+                console.error('Network/connection error');
+            }
+            else if (error.message.includes('quota') || error.message.includes('rate limit')) {
+                console.error('Rate limit or quota error');
+            }
+        }
         response.set('Access-Control-Allow-Origin', '*');
         response.status(500).json({
             error: error instanceof Error ? error.message : String(error)
