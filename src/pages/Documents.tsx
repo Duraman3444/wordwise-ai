@@ -17,7 +17,10 @@ import {
   Trash2,
   Filter,
   RefreshCw,
-  Upload
+  Upload,
+  Brain,
+  Sparkles,
+  Zap
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -186,13 +189,44 @@ export const Documents: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* AI Branding Banner */}
+        <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6 rounded-lg shadow-lg mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mr-4">
+                <Brain className="h-7 w-7 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold">AI-Enhanced Document Management</h2>
+                <p className="text-purple-100 text-sm mb-2">Organize and continue your AI-powered writing projects</p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="bg-white/20 px-2 py-1 rounded-full">✨ Smart Organization</span>
+                  <span className="bg-white/20 px-2 py-1 rounded-full">📊 Writing Analytics</span>
+                  <span className="bg-white/20 px-2 py-1 rounded-full">🔄 Auto-Save</span>
+                  <span className="bg-white/20 px-2 py-1 rounded-full">🎯 Progress Tracking</span>
+                </div>
+              </div>
+            </div>
+            <div className="hidden md:flex items-center space-x-4">
+              <div className="flex items-center bg-white/20 px-4 py-2 rounded-full">
+                <Zap className="h-4 w-4 mr-2" />
+                <span className="text-sm font-medium">AI-Powered</span>
+              </div>
+              <div className="flex items-center bg-white/20 px-4 py-2 rounded-full">
+                <Sparkles className="h-4 w-4 mr-2" />
+                <span className="text-sm font-medium">Smart Insights</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white transition-colors">Documents</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white transition-colors">Your Documents</h1>
             <p className="text-gray-600 dark:text-gray-300 mt-2 transition-colors">
-              Manage your writing projects and continue where you left off.
-              {!user && ' Documents are saved locally.'}
+              Manage your AI-enhanced writing projects and continue where you left off.
+              {!user && ' Documents are saved locally with AI analysis preserved.'}
             </p>
           </div>
           <div className="flex items-center space-x-3">
@@ -229,9 +263,12 @@ export const Documents: React.FC = () => {
               </Button>
             </div>
             
-            <Button onClick={createNewDocument} className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              New Document
+            <Button 
+              onClick={createNewDocument} 
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white border-none shadow-lg transform transition-all duration-200 hover:scale-105"
+            >
+              <Brain className="h-4 w-4 mr-2" />
+              New AI Document
             </Button>
           </div>
         </div>
@@ -288,21 +325,32 @@ export const Documents: React.FC = () => {
           </div>
         ) : filteredDocuments.length === 0 ? (
           <div className="text-center py-12">
-            <FileText className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4 transition-colors" />
+            <div className="w-20 h-20 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+              <Brain className="h-10 w-10 text-white" />
+            </div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2 transition-colors">
-              {searchTerm ? 'No documents found' : 'No documents yet'}
+              {searchTerm ? 'No AI documents found' : 'Ready to start your AI writing journey?'}
             </h3>
             <p className="text-gray-600 dark:text-gray-300 mb-6 transition-colors">
               {searchTerm 
                 ? 'Try adjusting your search terms or filters.'
-                : 'Create your first document to get started with WordWise AI.'
+                : 'Create your first AI-enhanced document and experience intelligent writing assistance with real-time grammar checking, vocabulary suggestions, and academic tone guidance.'
               }
             </p>
             {!searchTerm && (
-              <Button onClick={createNewDocument} className="bg-blue-600 hover:bg-blue-700 text-white">
-                <Plus className="h-4 w-4 mr-2" />
-                Create First Document
-              </Button>
+              <div className="space-y-3">
+                <Button 
+                  onClick={createNewDocument} 
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg transform transition-all duration-200 hover:scale-105"
+                >
+                  <Brain className="h-4 w-4 mr-2" />
+                  Create First AI Document
+                </Button>
+                <div className="flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  <span>Powered by GPT-4 • Real-time AI assistance</span>
+                </div>
+              </div>
             )}
           </div>
         ) : (
@@ -311,35 +359,41 @@ export const Documents: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-colors">
                 <div className="flex items-center">
-                  <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center transition-colors">
-                    <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center transition-colors">
+                    <FileText className="h-4 w-4 text-white" />
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors">Total Documents</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors">AI Documents</p>
                     <p className="text-xl font-bold text-gray-900 dark:text-white transition-colors">{documents.length}</p>
+                    {documents.length > 0 && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">AI-enhanced</p>
+                    )}
                   </div>
                 </div>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-colors">
                 <div className="flex items-center">
-                  <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center transition-colors">
-                    <Edit className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-green-600 rounded-lg flex items-center justify-center transition-colors">
+                    <Brain className="h-4 w-4 text-white" />
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors">Total Words</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors">AI-Analyzed Words</p>
                     <p className="text-xl font-bold text-gray-900 dark:text-white transition-colors">
                       {documents.reduce((total, doc) => total + (doc.wordCount || 0), 0).toLocaleString()}
                     </p>
+                    {documents.length > 0 && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">Grammar checked</p>
+                    )}
                   </div>
                 </div>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-colors">
                 <div className="flex items-center">
-                  <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center transition-colors">
-                    <Calendar className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg flex items-center justify-center transition-colors">
+                    <Sparkles className="h-4 w-4 text-white" />
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors">Recent Activity</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors">Recent AI Activity</p>
                     <p className="text-xl font-bold text-gray-900 dark:text-white transition-colors">
                       {documents.filter(doc => {
                         const weekAgo = new Date()
@@ -348,21 +402,27 @@ export const Documents: React.FC = () => {
                         return docDate > weekAgo
                       }).length}
                     </p>
+                    {documents.length > 0 && (
+                      <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">This week</p>
+                    )}
                   </div>
                 </div>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-colors">
                 <div className="flex items-center">
-                  <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center transition-colors">
-                    <Clock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg flex items-center justify-center transition-colors">
+                    <Clock className="h-4 w-4 text-white" />
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors">Avg Reading Time</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors">AI Reading Time</p>
                     <p className="text-xl font-bold text-gray-900 dark:text-white transition-colors">
                       {documents.length > 0 
                         ? Math.round(documents.reduce((total, doc) => total + getReadingTime(doc.wordCount || 0), 0) / documents.length)
                         : 0}m
                     </p>
+                    {documents.length > 0 && (
+                      <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">Avg per doc</p>
+                    )}
                   </div>
                 </div>
               </div>

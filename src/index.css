@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* AI Demo Animations */
+@keyframes fade-in {
+  from { 
+    opacity: 0; 
+    transform: translateY(10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes slide-in {
+  from { 
+    opacity: 0; 
+    transform: translateX(-10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(0); 
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out;
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out forwards;
+  opacity: 0;
+}
+
 @layer base {
   :root {
     /* Toast colors for light theme */
@@ -51,6 +83,106 @@
     @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm;
   }
   
+  /* AI Suggestion Underlines - Clean and Professional */
+  /* Light Mode Colors */
+  mark[data-suggestion-type="grammar"] {
+    background: transparent;
+    color: inherit;
+    border-bottom: 2px solid #ef4444;
+    text-decoration: underline;
+    text-decoration-color: #ef4444;
+    text-decoration-style: wavy;
+    cursor: pointer;
+  }
+  
+  mark[data-suggestion-type="spelling"] {
+    background: transparent;
+    color: inherit;
+    border-bottom: 2px solid #f97316;
+    text-decoration: underline;
+    text-decoration-color: #f97316;
+    text-decoration-style: wavy;
+    cursor: pointer;
+  }
+  
+  mark[data-suggestion-type="vocabulary"] {
+    background: transparent;
+    color: inherit;
+    border-bottom: 2px solid #8b5cf6;
+    text-decoration: underline;
+    text-decoration-color: #8b5cf6;
+    text-decoration-style: wavy;
+    cursor: pointer;
+  }
+  
+  mark[data-suggestion-type="clarity"] {
+    background: transparent;
+    color: inherit;
+    border-bottom: 2px solid #3b82f6;
+    text-decoration: underline;
+    text-decoration-color: #3b82f6;
+    text-decoration-style: wavy;
+    cursor: pointer;
+  }
+  
+  mark[data-suggestion-type="style"] {
+    background: transparent;
+    color: inherit;
+    border-bottom: 2px solid #22c55e;
+    text-decoration: underline;
+    text-decoration-color: #22c55e;
+    text-decoration-style: wavy;
+    cursor: pointer;
+  }
+  
+  mark[data-suggestion-type="punctuation"] {
+    background: transparent;
+    color: inherit;
+    border-bottom: 2px solid #f59e0b;
+    text-decoration: underline;
+    text-decoration-color: #f59e0b;
+    text-decoration-style: wavy;
+    cursor: pointer;
+  }
+
+  /* Dark Mode Colors - Brighter and more visible */
+  .dark mark[data-suggestion-type="grammar"] {
+    color: inherit;
+    border-bottom-color: #f87171;
+    text-decoration-color: #f87171;
+  }
+  
+  .dark mark[data-suggestion-type="spelling"] {
+    color: inherit;
+    border-bottom-color: #fb923c;
+    text-decoration-color: #fb923c;
+  }
+  
+  .dark mark[data-suggestion-type="vocabulary"] {
+    color: inherit;
+    border-bottom-color: #a78bfa;
+    text-decoration-color: #a78bfa;
+  }
+  
+  .dark mark[data-suggestion-type="clarity"] {
+    color: inherit;
+    border-bottom-color: #60a5fa;
+    text-decoration-color: #60a5fa;
+  }
+  
+  .dark mark[data-suggestion-type="style"] {
+    color: inherit;
+    border-bottom-color: #4ade80;
+    text-decoration-color: #4ade80;
+  }
+  
+  .dark mark[data-suggestion-type="punctuation"] {
+    color: inherit;
+    border-bottom-color: #fbbf24;
+    text-decoration-color: #fbbf24;
+  }
+  
+  /* Legacy highlight classes (for backward compatibility) */
   .suggestion-highlight {
     @apply bg-yellow-100 dark:bg-yellow-900 border-b-2 border-yellow-400 cursor-pointer;
   }
@@ -76,4 +208,91 @@
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Analytics chart animations */
+@keyframes chartBarGrow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes chartLineGrow {
+  from {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chart-bar {
+  animation: chartBarGrow 0.8s ease-out;
+  transform-origin: bottom;
+}
+
+.chart-line {
+  animation: chartLineGrow 1.5s ease-out;
+}
+
+.metric-card {
+  animation: countUp 0.6s ease-out;
+}
+
+.metric-card:nth-child(1) { animation-delay: 0.1s; }
+.metric-card:nth-child(2) { animation-delay: 0.2s; }
+.metric-card:nth-child(3) { animation-delay: 0.3s; }
+.metric-card:nth-child(4) { animation-delay: 0.4s; }
+
+/* Pulse animation for loading states */
+@keyframes analyticsShimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.analytics-loading {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+  animation: analyticsShimmer 1.5s infinite;
+}
+
+.dark .analytics-loading {
+  background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+  background-size: 200px 100%;
+}
+
+/* Slide-in animation for demo suggestions */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.demo-suggestion {
+  animation: slideIn 0.5s ease-out;
 } 

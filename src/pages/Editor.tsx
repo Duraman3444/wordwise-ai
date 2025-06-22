@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
+import { AIWritingCoach } from '@/components/ui/AIWritingCoach'
 import { AIService } from '@/services/ai'
 import { Suggestion } from '@/types'
 import PDFExportService from '@/services/pdfExport'
@@ -31,7 +32,8 @@ import {
   EyeOff,
   Cloud,
   CloudOff,
-  Loader
+  Loader,
+  TrendingUp
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useEditor, EditorContent, Editor as TiptapEditor } from '@tiptap/react'
@@ -83,6 +85,7 @@ export const Editor: React.FC = () => {
   const [isAnalyzingTone, setIsAnalyzingTone] = useState(false)
   const [academicToneSuggestions, setAcademicToneSuggestions] = useState<Suggestion[]>([])
   const [showAcademicTone, setShowAcademicTone] = useState(false)
+  const [showAICoach, setShowAICoach] = useState(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout>()
   const analysisTimeoutRef = useRef<NodeJS.Timeout>()
@@ -413,35 +416,101 @@ export const Editor: React.FC = () => {
   const getFilteredIssues = (issues: Suggestion[] = []) => issues.filter(issue => !dismissedSuggestions.has(issue.id));
 
   const renderSuggestionBlock = (issue: Suggestion) => {
-    const typeStyles: Record<string, { icon: React.ReactElement; borderColor: string; titleColor: string }> = {
-        grammar: { icon: <AlertCircle className="h-4 w-4 text-red-500" />, borderColor: 'border-red-500/50', titleColor: 'text-red-800 dark:text-red-200' },
-        spelling: { icon: <Type className="h-4 w-4 text-yellow-500" />, borderColor: 'border-yellow-500/50', titleColor: 'text-yellow-800 dark:text-yellow-200' },
-        vocabulary: { icon: <Palette className="h-4 w-4 text-green-500" />, borderColor: 'border-green-500/50', titleColor: 'text-green-800 dark:text-green-200' },
-        clarity: { icon: <Lightbulb className="h-4 w-4 text-blue-500" />, borderColor: 'border-blue-500/50', titleColor: 'text-blue-800 dark:text-blue-200' },
-        style: { icon: <CheckCircle className="h-4 w-4 text-purple-500" />, borderColor: 'border-purple-500/50', titleColor: 'text-purple-800 dark:text-purple-200' },
-        punctuation: { icon: <AlertCircle className="h-4 w-4 text-orange-500" />, borderColor: 'border-orange-500/50', titleColor: 'text-orange-800 dark:text-orange-200' },
+    const typeStyles: Record<string, { 
+      icon: React.ReactElement; 
+      bgColor: string; 
+      borderColor: string; 
+      titleColor: string;
+      badgeColor: string;
+    }> = {
+        grammar: { 
+          icon: <Brain className="h-4 w-4 text-red-500" />, 
+          bgColor: 'bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20',
+          borderColor: 'border-red-200 dark:border-red-800',
+          titleColor: 'text-red-900 dark:text-red-100',
+          badgeColor: 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+        },
+        spelling: { 
+          icon: <Brain className="h-4 w-4 text-orange-500" />, 
+          bgColor: 'bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20',
+          borderColor: 'border-orange-200 dark:border-orange-800',
+          titleColor: 'text-orange-900 dark:text-orange-100',
+          badgeColor: 'bg-orange-100 text-orange-800 dark:bg-orange-800 dark:text-orange-100'
+        },
+        vocabulary: { 
+          icon: <Brain className="h-4 w-4 text-purple-500" />, 
+          bgColor: 'bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20',
+          borderColor: 'border-purple-200 dark:border-purple-800',
+          titleColor: 'text-purple-900 dark:text-purple-100',
+          badgeColor: 'bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100'
+        },
+        clarity: { 
+          icon: <Brain className="h-4 w-4 text-blue-500" />, 
+          bgColor: 'bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20',
+          borderColor: 'border-blue-200 dark:border-blue-800',
+          titleColor: 'text-blue-900 dark:text-blue-100',
+          badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100'
+        },
+        style: { 
+          icon: <Brain className="h-4 w-4 text-green-500" />, 
+          bgColor: 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20',
+          borderColor: 'border-green-200 dark:border-green-800',
+          titleColor: 'text-green-900 dark:text-green-100',
+          badgeColor: 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+        },
+        punctuation: { 
+          icon: <Brain className="h-4 w-4 text-amber-500" />, 
+          bgColor: 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20',
+          borderColor: 'border-amber-200 dark:border-amber-800',
+          titleColor: 'text-amber-900 dark:text-amber-100',
+          badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-800 dark:text-amber-100'
+        }
     };
     const styles = typeStyles[issue.type] || typeStyles.clarity;
 
     return (
-      <div key={issue.id} className={`p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-l-4 ${styles.borderColor} mb-2`}>
-        <div className={`flex items-start font-semibold text-sm ${styles.titleColor} mb-2`}>
-            <span className="mr-2">{styles.icon}</span>
-            <span>{issue.message}</span>
+      <div key={issue.id} className={`${styles.bgColor} border-2 ${styles.borderColor} rounded-xl p-4 mb-3 shadow-lg hover:shadow-xl transition-all duration-200`}>
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center">
+            {styles.icon}
+            <span className={`ml-2 font-semibold ${styles.titleColor}`}>
+              AI {issue.type.charAt(0).toUpperCase() + issue.type.slice(1)} Suggestion
+            </span>
+            <span className={`ml-2 px-2 py-1 text-xs rounded-full ${styles.badgeColor}`}>
+              GPT-4 Powered
+            </span>
+          </div>
+          <div className="flex space-x-1">
+            <Button size="xs" variant="ghost" onClick={() => handleAcceptSuggestion(issue)} 
+                    className="text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50 font-medium">
+              <Check className="h-3 w-3 mr-1" />
+              Accept AI Fix
+            </Button>
+            <Button size="xs" variant="ghost" onClick={() => handleRejectSuggestion(issue.id)} 
+                    className="text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
-        {issue.originalText && issue.suggestions && issue.suggestions[0] && (
-          <div className="text-xs text-gray-600 dark:text-gray-400 pl-6 mb-2">
-            Change <span className="font-mono bg-gray-200 dark:bg-gray-700 p-0.5 rounded">"{issue.originalText}"</span> to <span className="font-mono bg-gray-200 dark:bg-gray-700 p-0.5 rounded">"{issue.suggestions[0]}"</span>
+        
+        {issue.originalText && (
+          <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-3 mb-3">
+            <p className="text-gray-700 dark:text-gray-300 text-sm font-medium">
+              "{issue.originalText}"
+            </p>
           </div>
         )}
-        <div className="flex items-center justify-end space-x-2 pl-6">
-            <Button size="xs" variant="ghost" onClick={() => handleAcceptSuggestion(issue)} className="text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50">
-                <Check className="h-4 w-4 mr-1"/> Accept
-            </Button>
-            <Button size="xs" variant="ghost" onClick={() => handleRejectSuggestion(issue.id)} className="text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50">
-                <X className="h-4 w-4 mr-1"/> Dismiss
-            </Button>
-        </div>
+        
+        <p className="text-gray-800 dark:text-gray-200 text-sm mb-3 leading-relaxed">
+          {issue.message}
+        </p>
+        
+        {issue.explanation && (
+          <div className="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-400 px-3 py-2 text-sm">
+            <strong className="text-blue-800 dark:text-blue-200">💡 AI Explanation:</strong>
+            <p className="text-blue-700 dark:text-blue-300 mt-1">{issue.explanation}</p>
+          </div>
+        )}
       </div>
     );
   };
@@ -952,6 +1021,40 @@ export const Editor: React.FC = () => {
     }
   }, [editor, analyzeContentWithAI]);
 
+  // AI Writing Coach callback handlers
+  const handleGoalSet = useCallback((goal: any) => {
+    console.log('New writing goal set:', goal);
+    // Could integrate with localStorage or backend to persist goals
+  }, []);
+
+  const handleTipApplied = useCallback((tipId: string) => {
+    console.log('Writing tip applied:', tipId);
+    // Could provide feedback or track tip usage
+  }, []);
+
+  const handleTemplateSelected = useCallback((template: any) => {
+    console.log('Template selected:', template);
+    
+    // Create template structure in editor
+    if (editor && template.structure) {
+      const templateContent = template.structure
+        .map((section: string, index: number) => {
+          return `<h3>${section}</h3><p>[Write your ${section.toLowerCase()} here...]</p>`
+        })
+        .join('\n\n');
+      
+      // Insert template at current position or replace content
+      const confirmation = window.confirm(
+        `This will insert the "${template.name}" template structure. Continue?`
+      );
+      
+      if (confirmation) {
+        editor.commands.setContent(templateContent);
+        setTitle(`${template.name} - ${title}`);
+      }
+    }
+  }, [editor, title]);
+
     return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
       <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -963,6 +1066,16 @@ export const Editor: React.FC = () => {
               className="text-2xl font-bold bg-transparent focus:outline-none"
             />
           <div className="flex items-center space-x-3">
+            <Button 
+              size="sm" 
+              variant={showAICoach ? "primary" : "outline"}
+              onClick={() => setShowAICoach(!showAICoach)}
+              className={showAICoach ? "bg-purple-600 hover:bg-purple-700 text-white" : ""}
+            >
+              <Brain className="h-4 w-4 mr-2" />
+              AI Coach
+            </Button>
+
             <div className="relative">
               <Button 
                 size="sm" 
@@ -1083,8 +1196,91 @@ export const Editor: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-8">
+        {/* AI Branding Section */}
+        <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-lg shadow-lg mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center mr-3">
+                <Brain className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">AI Writing Assistant</h3>
+                <p className="text-purple-100 text-sm">Powered by GPT-4 • Real-time analysis</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              {isAnalyzing && (
+                <div className="flex items-center">
+                  <Loader className="h-4 w-4 animate-spin mr-2" />
+                  <span className="text-sm">AI Analyzing...</span>
+                </div>
+              )}
+              <div className="bg-white/20 px-3 py-1 rounded-full text-sm">
+                {aiAnalysis ? `${totalIssues} suggestions` : 'Ready'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* AI Status Dashboard */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">AI Status</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {isAnalyzing ? 'Analyzing...' : 'Active'}
+                </p>
+              </div>
+              <div className={`w-3 h-3 rounded-full ${isAnalyzing ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`}></div>
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Issues Found</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {totalIssues}
+                </p>
+              </div>
+              <AlertCircle className={`h-5 w-5 ${totalIssues > 0 ? 'text-red-500' : 'text-green-500'}`} />
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Writing Score</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {aiAnalysis?.overallScore || 100}/100
+                </p>
+              </div>
+              <TrendingUp className="h-5 w-5 text-blue-500" />
+            </div>
+            <Button 
+              size="xs" 
+              variant="outline"
+              onClick={() => navigate('/analytics')}
+              className="w-full text-xs py-1 h-6 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+            >
+              View Analytics
+            </Button>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">AI Model</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">GPT-4</p>
+              </div>
+              <Brain className="h-5 w-5 text-purple-500" />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-12 gap-6">
+          <div className={showAICoach ? "lg:col-span-6" : "lg:col-span-8"}>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
                 {editor && (
                     <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex items-center space-x-2">
@@ -1110,8 +1306,8 @@ export const Editor: React.FC = () => {
           </div>
                   </div>
                   
-          <div className="lg:col-span-4">
-            <div className="sticky top-8">
+          <div className={showAICoach ? "lg:col-span-3" : "lg:col-span-4"}>
+            <div className="sticky top-8 space-y-6">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold flex items-center">
@@ -1124,6 +1320,39 @@ export const Editor: React.FC = () => {
                             <RotateCcw className="h-3 w-3 mr-1" /> Reset
                         </Button>
                   )}
+                </div>
+
+                {/* Visual Legend for Underline Colors */}
+                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">
+                    AI Error Types in Editor
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center">
+                      <div className="w-4 h-0.5 bg-red-500 dark:bg-red-400 mr-2 rounded"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Grammar</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-4 h-0.5 bg-orange-500 dark:bg-orange-400 mr-2 rounded"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Spelling</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-4 h-0.5 bg-purple-500 dark:bg-purple-400 mr-2 rounded"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Vocabulary</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-4 h-0.5 bg-blue-500 dark:bg-blue-400 mr-2 rounded"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Clarity</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-4 h-0.5 bg-green-500 dark:bg-green-400 mr-2 rounded"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Style</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-4 h-0.5 bg-amber-500 dark:bg-amber-400 mr-2 rounded"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Punctuation</span>
+                    </div>
+                  </div>
                 </div>
                 
                 {aiAnalysis && (
@@ -1157,99 +1386,114 @@ export const Editor: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Academic Tone Guidance Panel */}
-                  {showAcademicTone && (
-                    <div className="mt-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-semibold flex items-center">
-                          <Brain className="h-5 w-5 text-blue-500 mr-2" />
-                          Academic Tone Guidance
-                          {isAnalyzingTone && <Loader className="h-4 w-4 ml-2 animate-spin" />}
-                        </h3>
-                        <Button
-                          size="xs"
-                          variant="ghost"
-                          onClick={() => setShowAcademicTone(false)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
               </div>
 
-                      <div className="space-y-3 max-h-[40vh] overflow-y-auto">
-                        {academicToneSuggestions.length === 0 && !isAnalyzingTone ? (
-                          <div className="text-center py-6">
-                            <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
-                            <p className="font-medium text-green-600 dark:text-green-400">
-                              Great academic tone! Your writing maintains appropriate formality.
-                            </p>
-                    </div>
-                        ) : (
-                          academicToneSuggestions.map((suggestion) => (
-                            <div
-                              key={suggestion.id}
-                              className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4"
-                            >
-                              <div className="flex justify-between items-start mb-3">
-                                <h4 className="font-medium text-blue-800 dark:text-blue-200 text-sm">
-                                  {suggestion.message}
-                                </h4>
-                                <div className="flex space-x-1">
-                                  <Button
-                                    size="xs"
-                                    onClick={() => handleAcceptSuggestion(suggestion)}
-                                    className="bg-green-500 hover:bg-green-600 text-white"
-                                  >
-                                    <Check className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    size="xs"
-                                    variant="ghost"
-                                    onClick={() => handleRejectSuggestion(suggestion.id)}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                              
-                              <div className="space-y-3">
-                                <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                  This is your sentence formalized and with better academic tone:
-                                </div>
-                                
-                                {suggestion.originalText && (
-                                  <div>
-                                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Original:</span>
-                                    <div className="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-400 px-3 py-2 mt-1 text-sm italic">
-                                      "{suggestion.originalText}"
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {suggestion.suggestions && suggestion.suggestions.length > 0 && (
-                                  <div>
-                                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Suggested:</span>
-                                    <div className="bg-green-100 dark:bg-green-900/30 border-l-4 border-green-400 px-3 py-2 mt-1 text-sm font-medium">
-                                      "{suggestion.suggestions[0]}"
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {suggestion.explanation && (
-                                  <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-2 rounded text-xs text-gray-600 dark:text-gray-400 mt-2">
-                                    <div className="font-medium mb-1">Why this improves your writing:</div>
-                                    <div className="whitespace-pre-line">{suggestion.explanation}</div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))
-                        )}
+              {/* Academic Tone Guidance Panel - In Same Column */}
+              {showAcademicTone && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold flex items-center">
+                      <Brain className="h-5 w-5 text-blue-500 mr-2" />
+                      Academic Tone Guidance
+                      {isAnalyzingTone && <Loader className="h-4 w-4 ml-2 animate-spin" />}
+                    </h3>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => setShowAcademicTone(false)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3 max-h-[40vh] overflow-y-auto">
+                    {academicToneSuggestions.length === 0 && !isAnalyzingTone ? (
+                      <div className="text-center py-6">
+                        <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
+                        <p className="font-medium text-green-600 dark:text-green-400">
+                          Great academic tone! Your writing maintains appropriate formality.
+                        </p>
                       </div>
+                    ) : (
+                      academicToneSuggestions.map((suggestion) => (
+                        <div
+                          key={suggestion.id}
+                          className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4"
+                        >
+                          <div className="flex justify-between items-start mb-3">
+                            <h4 className="font-medium text-blue-800 dark:text-blue-200 text-sm">
+                              {suggestion.message}
+                            </h4>
+                            <div className="flex space-x-1">
+                              <Button
+                                size="xs"
+                                onClick={() => handleAcceptSuggestion(suggestion)}
+                                className="bg-green-500 hover:bg-green-600 text-white"
+                              >
+                                <Check className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                onClick={() => handleRejectSuggestion(suggestion.id)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              This is your sentence formalized and with better academic tone:
+                            </div>
+                            
+                            {suggestion.originalText && (
+                              <div>
+                                <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Original:</span>
+                                <div className="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-400 px-3 py-2 mt-1 text-sm italic">
+                                  "{suggestion.originalText}"
+                                </div>
+                              </div>
+                            )}
+                            
+                            {suggestion.suggestions && suggestion.suggestions.length > 0 && (
+                              <div>
+                                <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Suggested:</span>
+                                <div className="bg-green-100 dark:bg-green-900/30 border-l-4 border-green-400 px-3 py-2 mt-1 text-sm font-medium">
+                                  "{suggestion.suggestions[0]}"
+                                </div>
+                              </div>
+                            )}
+                            
+                            {suggestion.explanation && (
+                              <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-2 rounded text-xs text-gray-600 dark:text-gray-400 mt-2">
+                                <div className="font-medium mb-1">Why this improves your writing:</div>
+                                <div className="whitespace-pre-line">{suggestion.explanation}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
                     </div>
-                  )}
+                    </div>
+
+          {/* AI Writing Coach Sidebar */}
+          {showAICoach && (
+            <div className="lg:col-span-3">
+              <div className="sticky top-8">
+                <AIWritingCoach 
+                  content={editor?.getText() || ''}
+                  onGoalSet={handleGoalSet}
+                  onTipApplied={handleTipApplied}
+                  onTemplateSelected={handleTemplateSelected}
+                />
               </div>
-                    </div>
-                    </div>
+            </div>
+          )}
                     </div>
                   </div>
   );

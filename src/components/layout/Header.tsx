@@ -4,7 +4,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
-import { PenTool, User, LogOut, Menu, FileText } from 'lucide-react'
+import { PenTool, User, LogOut, Menu, FileText, BarChart3 } from 'lucide-react'
 
 export const Header: React.FC = () => {
   const { isAuthenticated, user } = useAuthStore()
@@ -53,6 +53,13 @@ export const Header: React.FC = () => {
                 >
                   <FileText className="h-4 w-4" />
                   <span>Documents</span>
+                </Link>
+                <Link
+                  to="/analytics"
+                  className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-1"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Analytics</span>
                 </Link>
                 <ThemeToggle />
                 <div className="relative">
@@ -140,6 +147,13 @@ export const Header: React.FC = () => {
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Documents
+                </Link>
+                <Link
+                  to="/analytics"
+                  className="block text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-3 py-2 rounded-md text-base font-medium transition-colors"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Analytics
                 </Link>
                 <Link
                   to="/profile"

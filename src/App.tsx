@@ -13,6 +13,7 @@ import { Login } from './pages/auth/Login'
 import { Register } from './pages/auth/Register'
 import { Demo } from './pages/Demo'
 import { ImportDemo } from './pages/ImportDemo'
+import { Analytics } from './pages/Analytics'
 
 function App() {
   return (
@@ -57,6 +58,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <Profile />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/analytics" 
+                  element={
+                    <ProtectedRoute>
+                      <Analytics />
                     </ProtectedRoute>
                   } 
                 />
